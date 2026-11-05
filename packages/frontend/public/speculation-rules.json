@@ -1,0 +1,28 @@
+{
+  "prefetch": [
+    {
+      "where": {
+        "and": [
+          { "href_matches": "/*" },
+          { "not": { "href_matches": "/__*" } },
+          { "not": { "href_matches": "/v/*" } },
+          { "not": { "selector_matches": "[rel~=nofollow], [download]" } }
+        ]
+      },
+      "eagerness": "moderate"
+    }
+  ],
+  "prerender": [
+    {
+      "where": {
+        "and": [
+          { "href_matches": "/*" },
+          { "not": { "href_matches": "/__*" } },
+          { "not": { "href_matches": "/v/*" } },
+          { "not": { "selector_matches": "[rel~=nofollow], [download]" } }
+        ]
+      },
+      "eagerness": "conservative"
+    }
+  ]
+}

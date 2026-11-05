@@ -1,0 +1,9 @@
+/*
+ * Web fonts load in the lazy phase (or early on desktop / repeat visits; see scripts/site.js),
+ * never preloaded unless a measurement says so. The starter ships with the system font stack, so
+ * this file is empty. To add a font:
+ *   1. put subset woff2 files in public/fonts/
+ *   2. add @font-face rules here with font-display: swap and a unicode-range
+ *   3. add a metric-matched fallback @font-face (size-adjust, ascent-override,
+ *      descent-override, src: local("Arial")) to eager.css and put both in the font-family token
+ */

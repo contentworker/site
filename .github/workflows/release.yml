@@ -1,0 +1,43 @@
+name: Release a package
+
+# Publishes one package to npm when its tag is pushed, after the same checks as CI:
+#   frontend@v<version>     @contentworker/frontend     (packages/frontend)
+#   create-site@v<version>  @contentworker/create-site  (packages/create-site)
+# Uses npm trusted publishing (OIDC from this workflow, no stored token) and attaches a provenance
+# attestation. On npmjs.com, each package's "Trusted publisher" must name GitHub Actions, org
+# `contentworker`, repo `site`, workflow `release.yml`.
+on:
+  push:
+    tags: ["frontend@v*", "create-site@v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - name: npm with trusted publishing
+        run: npm install -g npm@latest
+      - run: npm ci
+      - name: The tag names a package and matches its version
+        id: pkg
+        run: |
+          dir="${GITHUB_REF_NAME%@v*}"
+          case "$dir" in frontend|create-site) ;; *) echo "no package for tag ${GITHUB_REF_NAME}"; exit 1 ;; esac
+          version=$(node -p "require('./packages/${dir}/package.json').version")
+          test "${GITHUB_REF_NAME}" = "${dir}@v${version}" || { echo "tag ${GITHUB_REF_NAME} ≠ ${dir}@v${version}"; exit 1; }
+          echo "name=$(node -p "require('./packages/${dir}/package.json').name")" >> "$GITHUB_OUTPUT"
+      - run: npm run lint
+      - run: npm run check-types
+      - run: npm test
+      - run: npm run budgets
+      - name: Publish (builds dist/ on prepack)
+        run: npm publish -w "${{ steps.pkg.outputs.name }}"

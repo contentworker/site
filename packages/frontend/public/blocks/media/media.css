@@ -1,0 +1,22 @@
+.media figure {
+  margin: 0;
+}
+
+.media img,
+.media video {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  background-color: var(--light-color);
+}
+
+.media figcaption {
+  margin-top: 8px;
+  color: var(--dark-color);
+  font-size: var(--body-font-size-s);
+}
+
+.media-credit {
+  font-size: var(--body-font-size-xs);
+}

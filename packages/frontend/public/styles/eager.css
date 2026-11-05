@@ -1,0 +1,407 @@
+/*
+ * Eager styles: the only render-blocking stylesheet. Tokens, base type, the header, sections and
+ * buttons. Budget: 8 KB gzip (budgets.json). Block styles live with their block; post-LCP globals
+ * go in lazy.css.
+ */
+:root {
+  color-scheme: light dark;
+
+  /* colors (contrast ≥ 4.5:1 for text on background) */
+  --background-color: #fff;
+  --light-color: #f4f4f5;
+  --dark-color: #52525b;
+  --text-color: #18181b;
+  --link-color: #2448d8;
+  --link-hover-color: #1a37a8;
+  --on-image-color: #fff;
+  --on-accent-color: #fff;
+
+  /* fonts: each web font has a metric-matched fallback below, so the swap doesn't shift layout */
+  --body-font-family: system-ui, -apple-system, "Segoe UI", roboto, sans-serif;
+  --heading-font-family: var(--body-font-family);
+  --mono-font-family: ui-monospace, "SF Mono", menlo, consolas, monospace;
+
+  /* sizes (mobile first) */
+  --body-font-size-m: 18px;
+  --body-font-size-s: 16px;
+  --body-font-size-xs: 14px;
+  --heading-font-size-xxl: 40px;
+  --heading-font-size-xl: 32px;
+  --heading-font-size-l: 26px;
+  --heading-font-size-m: 22px;
+  --heading-font-size-s: 20px;
+  --heading-font-size-xs: 18px;
+  --content-width: 1200px;
+  --nav-height: 64px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background-color: #0f0f11;
+    --light-color: #1c1c20;
+    --dark-color: #a1a1aa;
+    --text-color: #f4f4f5;
+    --link-color: #8ea6ff;
+    --link-hover-color: #b8c7ff;
+    --on-accent-color: #0f0f11;
+  }
+}
+
+@media (width >= 900px) {
+  :root {
+    --heading-font-size-xxl: 56px;
+    --heading-font-size-xl: 40px;
+    --heading-font-size-l: 30px;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  font-family: var(--body-font-family);
+  font-size: var(--body-font-size-m);
+  line-height: 1.6;
+  text-rendering: optimizespeed;
+}
+
+body.nav-open {
+  overflow-y: hidden;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin-top: 0.8em;
+  margin-bottom: 0.25em;
+  font-family: var(--heading-font-family);
+  font-weight: 700;
+  line-height: 1.2;
+  text-wrap: balance;
+  scroll-margin: calc(var(--nav-height) + 16px);
+}
+
+h1 {
+  font-size: var(--heading-font-size-xxl);
+}
+h2 {
+  font-size: var(--heading-font-size-xl);
+}
+h3 {
+  font-size: var(--heading-font-size-l);
+}
+h4 {
+  font-size: var(--heading-font-size-m);
+}
+h5 {
+  font-size: var(--heading-font-size-s);
+}
+h6 {
+  font-size: var(--heading-font-size-xs);
+}
+
+p,
+ol,
+ul,
+pre,
+blockquote,
+figure {
+  margin-top: 0.8em;
+  margin-bottom: 0.25em;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+a:any-link {
+  color: var(--link-color);
+  text-underline-offset: 0.15em;
+}
+
+a:hover {
+  color: var(--link-hover-color);
+}
+
+:focus-visible {
+  outline: 3px solid var(--link-color);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  z-index: 10;
+  padding: 8px 16px;
+  background: var(--background-color);
+}
+
+.skip-link:focus {
+  top: 8px;
+}
+
+/* header (always above the fold, so styled here) */
+header {
+  min-height: var(--nav-height);
+  border-bottom: 1px solid var(--light-color);
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  max-width: var(--content-width);
+  min-height: var(--nav-height);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.nav a:any-link {
+  color: currentcolor;
+  text-decoration: none;
+}
+
+.nav-brand {
+  font-weight: 700;
+}
+
+.nav-menu summary {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.nav-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.nav-menu-icon,
+.nav-menu-icon::before,
+.nav-menu-icon::after {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: currentcolor;
+}
+
+.nav-menu-icon {
+  position: relative;
+}
+
+.nav-menu-icon::before,
+.nav-menu-icon::after {
+  content: "";
+  position: absolute;
+}
+
+.nav-menu-icon::before {
+  top: -7px;
+}
+.nav-menu-icon::after {
+  top: 7px;
+}
+
+.nav-sections {
+  margin: 0;
+  padding: 16px 0;
+  list-style: none;
+}
+
+.nav-sections a:any-link {
+  display: block;
+  padding: 10px 0;
+}
+
+.nav-sections a[aria-current="page"] {
+  text-decoration: underline;
+}
+
+/* Mobile: the list shows when the <details> toggle is open. Desktop: always, toggle hidden. */
+@media (width < 900px) {
+  .nav-sections {
+    display: none;
+    flex-basis: 100%;
+  }
+
+  .nav:has(.nav-menu[open]) .nav-sections {
+    display: block;
+  }
+}
+
+@media (width >= 900px) {
+  .nav {
+    padding: 0 32px;
+  }
+
+  .nav-menu {
+    display: none;
+  }
+
+  .nav-sections {
+    display: flex;
+    gap: 32px;
+    padding: 0;
+  }
+}
+
+/* rich text that affects layout (kept out of lazy.css so it can't shift the first viewport) */
+code,
+pre {
+  font-family: var(--mono-font-family);
+  font-size: var(--body-font-size-s);
+}
+
+pre {
+  padding: 16px;
+  border-radius: 8px;
+  background-color: var(--light-color);
+  overflow-x: auto;
+}
+
+blockquote {
+  margin-inline: 0;
+  border-left: 4px solid var(--light-color);
+  padding-left: 16px;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--light-color);
+  padding: 8px;
+  text-align: left;
+}
+
+figcaption {
+  color: var(--dark-color);
+  font-size: var(--body-font-size-s);
+}
+
+/* sections */
+main > .section {
+  margin: 40px 0;
+}
+
+main > .section > div {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+main > .section:first-child {
+  margin-top: 0;
+}
+
+main > .section.light,
+main > .section.highlight {
+  margin: 0;
+  padding: 40px 0;
+  background-color: var(--light-color);
+}
+
+/* Full-bleed blocks opt out of the content column. */
+main > .section > .hero-wrapper {
+  max-width: none;
+  padding: 0;
+}
+
+@media (width >= 900px) {
+  main > .section > div {
+    padding: 0 32px;
+  }
+}
+
+/* buttons (from the Worker's CTA rule) */
+p.button-wrapper {
+  margin: 16px 0;
+}
+
+a.button:any-link {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 44px;
+  border: 2px solid var(--text-color);
+  border-radius: 2em;
+  padding: 0.4em 1.2em;
+  font-weight: 600;
+  line-height: 1.25;
+  text-decoration: none;
+}
+
+a.button.primary {
+  background-color: var(--text-color);
+  color: var(--background-color);
+}
+
+a.button.secondary {
+  background-color: transparent;
+  color: var(--text-color);
+}
+
+a.button.accent {
+  border-color: var(--link-color);
+  background-color: var(--link-color);
+  color: var(--on-accent-color);
+}
+
+a.button:hover {
+  opacity: 0.88;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* !important: a reduced-motion preference must beat every animation (biome.json override). */
+  * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Preview mode (never cached, never indexed) */
+.preview-bar {
+  padding: 8px 24px;
+  background: #fde68a;
+  color: #18181b;
+  font-size: var(--body-font-size-xs);
+}
+
+.preview-bar a:any-link {
+  color: inherit;
+}
+
+/* Modern navigation: cross-document view transitions. */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+}
+
+/*
+ * No content-visibility here: on desktop the second section is often in the first viewport, and
+ * Chrome lays it out at the intrinsic-size placeholder before its real size, which shifted
+ * layout (CLS 0.083 on /blog in the Lighthouse gate). Pages are small enough not to need it.
+ */

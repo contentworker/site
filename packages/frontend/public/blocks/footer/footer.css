@@ -1,0 +1,14 @@
+.footer {
+  padding: 40px 24px;
+  background-color: var(--light-color);
+  font-size: var(--body-font-size-s);
+}
+
+.footer-body {
+  max-width: var(--content-width);
+  margin: 0 auto;
+}
+
+.footer-legal {
+  color: var(--dark-color);
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "contentworker-site",
+  // The whole site Worker comes from the runtime: no site code. A site with custom blocks points
+  // main at its own src/worker.ts (defineSite). public/ holds only this site's own files.
+  "main": "node_modules/@contentworker/frontend/src/entry.ts",
+  "compatibility_date": "2026-10-15",
+  // Workers Caching: the Site entrypoint is cached at the edge; the default (gateway) is not.
+  "cache": { "enabled": true },
+  "exports": {
+    "default": { "type": "worker", "cache": { "enabled": false } },
+    "Site": { "type": "worker", "cache": { "enabled": true } }
+  },
+  // PurgeQueue batches purges and repeats them once (src/purge-queue.js). Tags only ever append.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PurgeQueue"] }],
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS",
+    // Paths that aren't files (every page, /v/<build>/…, /sitemap.xml) fall through to the Worker.
+    "not_found_handling": "none",
+    "html_handling": "none"
+  },
+  "observability": { "enabled": true },
+  "vars": {
+    // Your ContentWorker backend: "<space>/<env>". Over HTTP, give the full Delivery URL instead:
+    // "https://cdn.<your domain>/<space>/<env>". With the CONTENTWORKER_DELIVERY binding below,
+    // the bare namespace is enough.
+    "CONTENTWORKER": "https://cdn.contentworker.app/contentworker-site/main",
+    // Optional, defaults to en-US.
+    "CONTENTWORKER_LOCALE": "en-US",
+    "SITE_ORIGIN": "https://contentworker.site",
+    // CI overrides this with the commit SHA so every deploy gets fresh asset URLs.
+    "BUILD_ID": "dev"
+  },
+  // Same Cloudflare account as the CMS? Bind its delivery Worker and skip the public hop. The
+  // binding wins over the URL, so the Lighthouse gate (wrangler dev, mock Delivery API) would need
+  // its own config first:
+  // "services": [{ "binding": "CONTENTWORKER_DELIVERY", "service": "contentworker-delivery" }],
+  // CONTENTWORKER_KEY: a Content Delivery API key for the space. CONTENTWORKER_WEBHOOK_SECRET:
+  // the secret of the ContentWorker webhook to /__cw/webhook. CI uploads both with each deploy
+  // (deploy.yml, --secrets-file); a deploy without them fails.
+  "secrets": { "required": ["CONTENTWORKER_KEY", "CONTENTWORKER_WEBHOOK_SECRET"] },
+  // Workers custom domains: Cloudflare creates the DNS records and certificates on deploy. The
+  // runtime redirects www to SITE_ORIGIN's host, so www needs nothing else.
+  "routes": [
+    { "pattern": "contentworker.site", "custom_domain": true },
+    { "pattern": "www.contentworker.site", "custom_domain": true }
+  ]
+}

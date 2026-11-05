@@ -1,0 +1,27 @@
+version: 2
+
+updates:
+  # One npm workspace: the root lockfile covers the showcase site and packages/frontend.
+  # Dev tooling (wrangler, Lighthouse, TypeScript, Biome) is pinned exactly; these bumps keep it
+  # current, and every PR still has to pass the Lighthouse gate.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      tooling:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  # Workflow actions are pinned by commit SHA; this keeps the pins (and their version comments)
+  # moving to new releases instead of going stale.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]

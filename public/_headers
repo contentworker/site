@@ -1,0 +1,6 @@
+# Unversioned asset URLs revalidate. Pages reference /v/<build>/… URLs instead, which the Worker
+# serves immutable (src/assets.js).
+/*
+  X-Content-Type-Options: nosniff
+/fonts/*
+  Cache-Control: public, max-age=31536000, immutable

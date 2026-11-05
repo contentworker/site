@@ -1,0 +1,12 @@
+/*
+ * Styles that can wait until after LCP because they never change layout on screen. Anything that
+ * can sit above the fold and affects size (code, tables, quotes, captions) is in eager.css: arriving
+ * late, it shifted /integrate's code block (CLS 0.009 in the Lighthouse gate).
+ */
+@media print {
+  header,
+  footer,
+  .skip-link {
+    display: none;
+  }
+}

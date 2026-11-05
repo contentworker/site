@@ -1,0 +1,37 @@
+name: PageSpeed Insights (production)
+
+# The brief's ground truth: PageSpeed Insights, run by Google, on every URL in the live sitemap,
+# mobile and desktop. Nightly and on demand; opens an issue when any page drops below 100.
+# Needs the PSI_API_KEY secret (a Google Cloud API key with the PageSpeed Insights API enabled).
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+    inputs:
+      origin:
+        description: Site to check
+        default: https://contentworker.site
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  psi:
+    runs-on: ubuntu-latest
+    if: ${{ vars.SITE_LIVE == 'true' || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Run PSI on every sitemap URL
+        env:
+          PSI_API_KEY: ${{ secrets.PSI_API_KEY }}
+          ORIGIN: ${{ inputs.origin || 'https://contentworker.site' }}
+        run: node packages/frontend/scripts/psi.ts
+      - name: Open an issue on regression
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue create --title "PageSpeed Insights below 100 ($(date -u +%F))" --body-file .wrangler/psi-summary.md

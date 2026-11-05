@@ -1,0 +1,30 @@
+{
+  "$comment": "Gzip byte budgets for public/ (docs/budget.md explains each). CI fails a PR over budget. Raise a number only with a measured reason in docs/budget.md.",
+  "groups": [
+    {
+      "name": "eager CSS (render-blocking, with site.css)",
+      "files": ["styles/eager.css", "styles/site.css"],
+      "max": 8192
+    },
+    {
+      "name": "eager JS",
+      "files": ["scripts/lib.js", "scripts/site.js", "scripts/shared.js"],
+      "max": 10240
+    },
+    {
+      "name": "lazy CSS",
+      "files": ["styles/lazy.css", "styles/fonts.css"],
+      "max": 8192
+    },
+    {
+      "name": "delayed JS",
+      "files": ["scripts/delayed.js", "scripts/consent.js", "scripts/consented.js"],
+      "max": 20480
+    }
+  ],
+  "perBlock": {
+    "css": 3072,
+    "js": 4096
+  },
+  "blockExceptions": {}
+}

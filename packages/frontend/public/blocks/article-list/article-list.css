@@ -1,0 +1,32 @@
+.article-list-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.article-list-items li {
+  border-bottom: 1px solid var(--light-color);
+  padding: 24px 0;
+}
+
+.article-list-items h2 {
+  margin: 0;
+  font-size: var(--heading-font-size-m);
+}
+
+.article-list-items h2 a:any-link {
+  color: inherit;
+}
+
+.article-list-date {
+  margin: 4px 0 0;
+  color: var(--dark-color);
+  font-size: var(--body-font-size-s);
+}
+
+.article-list-pages {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  padding: 24px 0;
+}

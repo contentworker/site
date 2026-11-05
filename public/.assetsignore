@@ -1,0 +1,2 @@
+# Server-side code (block renderers) is bundled into the Worker and never served.
+*.ts

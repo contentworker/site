@@ -1,0 +1,30 @@
+.columns-grid {
+  display: grid;
+  gap: 32px;
+}
+
+.columns-grid > div > :first-child {
+  margin-top: 0;
+}
+
+.columns-img-col img {
+  display: block;
+  width: 100%;
+  border-radius: 12px;
+}
+
+@media (width >= 900px) {
+  .columns-2-cols {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .columns-3-cols {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .columns-4-cols {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .columns-grid {
+    align-items: center;
+  }
+}

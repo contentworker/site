@@ -1,0 +1,46 @@
+{
+  "name": "@contentworker/create-site",
+  "version": "0.1.0",
+  "description": "npm create @contentworker/site: a new ContentWorker site on @contentworker/frontend, ready to run, optionally with its content model and starter pages.",
+  "keywords": [
+    "contentworker",
+    "create",
+    "starter",
+    "cloudflare",
+    "workers",
+    "cms"
+  ],
+  "homepage": "https://contentworker.site/integrate",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/contentworker/site",
+    "directory": "packages/create-site"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "create-site": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "check-types": "tsc -p tsconfig.json",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

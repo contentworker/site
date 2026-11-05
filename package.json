@@ -1,0 +1,35 @@
+{
+  "name": "contentworker-site",
+  "private": true,
+  "version": "0.1.0",
+  "description": "The ContentWorker showcase site (https://contentworker.site): a site built only from @contentworker/frontend, plus the runtime itself in packages/frontend.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "postinstall": "npm run generate -w @contentworker/frontend",
+    "dev": "npm run generate -w @contentworker/frontend && wrangler dev",
+    "types": "wrangler types --strict-vars=false",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "check-types": "npm run check-types --workspaces",
+    "test": "npm test --workspaces",
+    "budgets": "npm run budgets -w @contentworker/frontend",
+    "bundle": "npm run generate -w @contentworker/frontend && wrangler deploy --dry-run --outdir .wrangler/dry-run",
+    "check": "npm run lint && npm run check-types && npm test && npm run budgets && npm run bundle",
+    "lighthouse": "npm run generate -w @contentworker/frontend && node packages/frontend/scripts/lighthouse-gate.ts",
+    "new-block": "node packages/frontend/scripts/site-new-block.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "wrangler": "4.156.1"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "dependencies": {
+    "@contentworker/frontend": "*"
+  }
+}

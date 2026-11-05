@@ -1,0 +1,15 @@
+{
+  // Compiles the command line (scripts/cli.ts and everything it imports) to dist/ for npm:
+  // Node runs .ts by stripping types, but never inside node_modules. The Worker code isn't built;
+  // it ships as TypeScript and wrangler bundles it.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": ".",
+    "rewriteRelativeImportExtensions": true,
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": ["scripts/cli.ts"]
+}

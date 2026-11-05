@@ -1,0 +1,15 @@
+.cta {
+  border-radius: 16px;
+  padding: 40px 24px;
+  background-color: var(--light-color);
+  text-align: center;
+}
+
+.cta-body {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.cta h2 {
+  margin-top: 0;
+}

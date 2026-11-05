@@ -1,0 +1,79 @@
+name: Deploy contentworker.site
+
+# Deploys the showcase site (the repo root: a two-file site on @contentworker/frontend).
+# Off until you turn it on: runs on demand, or on pushes to main once the repository variable
+# DEPLOY_ENABLED is "true".
+#
+# Needs, once, as repository secrets:
+#   CLOUDFLARE_API_TOKEN          an account-owned token: Workers Admin (creates the Worker),
+#                                 Account Settings Read, Zone > Workers Routes > Write on
+#                                 contentworker.site (the custom domain)
+#   CLOUDFLARE_ACCOUNT_ID
+#   CONTENTWORKER_KEY             the space's Content Delivery API key
+#   CONTENTWORKER_WEBHOOK_SECRET  the purge webhook's secret
+# The last two go to the Worker with each deploy (--secrets-file); wrangler.jsonc's
+# `secrets.required` fails a deploy that lacks either.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://contentworker.site
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # The same gate as a pull request: nothing below 100 ships.
+      - run: npm run lint
+      - run: npm run check-types
+      - run: npm test
+      - run: npm run budgets
+      # The Worker's secrets go up with the code (wrangler.jsonc `secrets.required`), so a version
+      # never runs without them. The file lives in the runner's temp dir and is removed after.
+      - name: Deploy (BUILD_ID = the commit, so code URLs change with every deploy)
+        env:
+          CONTENTWORKER_KEY: ${{ secrets.CONTENTWORKER_KEY }}
+          CONTENTWORKER_WEBHOOK_SECRET: ${{ secrets.CONTENTWORKER_WEBHOOK_SECRET }}
+        run: |
+          set -eu
+          secrets="$RUNNER_TEMP/worker-secrets.json"
+          trap 'rm -f "$secrets"' EXIT
+          umask 077
+          jq -n '{CONTENTWORKER_KEY: env.CONTENTWORKER_KEY, CONTENTWORKER_WEBHOOK_SECRET: env.CONTENTWORKER_WEBHOOK_SECRET}' > "$secrets"
+          npx wrangler deploy --var BUILD_ID:${{ github.sha }} --secrets-file "$secrets"
+      - name: Smoke test the live site
+        env:
+          ORIGIN: https://contentworker.site
+        run: |
+          set -eu
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsS "$ORIGIN/health" | grep -q ok; then break; fi
+            sleep 10
+          done
+          status=$(curl -s -o /tmp/home.html -w '%{http_code}' "$ORIGIN/")
+          test "$status" = 200 || { echo "home page answered $status"; exit 1; }
+          grep -q '<h1>' /tmp/home.html
+          grep -q "/v/${{ github.sha }}/styles/eager.css" /tmp/home.html || { echo "home page is not this build"; exit 1; }
+          curl -fsS "$ORIGIN/sitemap.xml" | grep -q '<sitemapindex'
+          curl -fsSI "$ORIGIN/v/${{ github.sha }}/scripts/site.js" | grep -qi 'immutable'
+          echo "contentworker.site is serving ${{ github.sha }}"
