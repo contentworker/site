@@ -147,7 +147,15 @@ test('templates stay in step with the runtime and the showcase site', () => {
   const frontend = JSON.parse(readFileSync(join(repo, 'packages/frontend/package.json'), 'utf8'));
   assert.equal(FRONTEND_RANGE, `^${frontend.version}`, 'new sites get the current runtime');
   const root = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'));
-  assert.equal(WRANGLER_RANGE, `^${root.devDependencies.wrangler}`);
+  // Not equal: Dependabot bumps the repo's wrangler, and new sites' range still covers it.
+  const [low, tested] = [WRANGLER_RANGE.slice(1), root.devDependencies.wrangler as string].map(
+    (v) => v.split('.').map(Number) as [number, number, number],
+  ) as [[number, number, number], [number, number, number]];
+  assert.equal(tested[0], low[0], 'same wrangler major');
+  assert.ok(
+    tested[1] > low[1] || (tested[1] === low[1] && tested[2] >= low[2]),
+    `wrangler ${root.devDependencies.wrangler} is inside ${WRANGLER_RANGE}`,
+  );
   const showcase = jsonc(readFileSync(join(repo, 'wrangler.jsonc'), 'utf8'));
   assert.equal(COMPATIBILITY_DATE, showcase.compatibility_date);
 });
