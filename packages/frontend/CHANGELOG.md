@@ -11,6 +11,16 @@ tokens or options are **minor**; fixes that keep output stable are **patch**.
 Bump `version` in `package.json`, add its section here, merge, then push the tag
 `frontend@v<version>`: `release.yml` checks and publishes it to npm with provenance.
 
+## 0.3.0
+
+- Navigation menus: the header renders ContentWorker's `main` menu and the footer its `footer`
+  menu, nested up to three levels, with dropdowns on desktop that work on hover and keyboard focus
+  without JS. With no menu, the header keeps using `siteSettings.nav`. Custom headers and footers
+  read them from `ctx.menus`.
+- Pages showing a menu carry the Cache-Tag `menu`. `menus.changed`, `entry.published` and
+  `entry.unpublished` purge it, because a publish can add, rename or remove a menu item. Add the
+  `menus.changed` topic to your purge webhook.
+
 ## 0.2.0
 
 - The www twin of `SITE_ORIGIN`'s host (or the bare host, when the canonical one is `www.`)

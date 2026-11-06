@@ -15,6 +15,7 @@ export const TOPICS = [
   'asset.deleted',
   'asset.rights_changed',
   'content_type.published',
+  'menus.changed',
   'release.published',
   'environment_alias.changed',
   'environment.deleted',
@@ -68,10 +69,12 @@ const typeTag = (event: CwEvent): string[] =>
 export function tagsForEvent(event: CwEvent | null | undefined): string[] {
   switch (event?.type) {
     // type:<contentType> purges lists that include the entry: sitemaps, llms.txt, redirects.
+    // `menu` too: a menu's links resolve at read time, so a publish can add, rename or move an
+    // item, and a dropped item leaves no tag of its own. Only pages showing a menu carry it.
     case 'entry.published':
-      return [`e:${event.entryId}`, 'notfound', ...typeTag(event)];
+      return [`e:${event.entryId}`, 'notfound', 'menu', ...typeTag(event)];
     case 'entry.unpublished':
-      return [`e:${event.entryId}`, ...typeTag(event)];
+      return [`e:${event.entryId}`, 'menu', ...typeTag(event)];
     case 'asset.published':
     case 'asset.unpublished':
     case 'asset.deleted':
@@ -80,6 +83,8 @@ export function tagsForEvent(event: CwEvent | null | undefined): string[] {
     // Redirects changed in the CMS: cached redirects and 404s (a path may now redirect).
     case 'redirects.changed':
       return ['redirects', 'notfound'];
+    case 'menus.changed':
+      return ['menu'];
     case 'entries.published_bulk':
     case 'content_type.published':
     case 'release.published':

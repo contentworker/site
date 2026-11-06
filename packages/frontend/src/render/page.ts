@@ -78,14 +78,17 @@ export async function renderPage({
   preview,
 }: PageInput): Promise<Response> {
   const route = match(path);
-  const [settings, published] = await Promise.all([
+  const [settings, main, footer, published] = await Promise.all([
     delivery.first('siteSettings', 2),
+    delivery.menu('main'),
+    delivery.menu('footer'),
     preview?.entry || !route
       ? null
       : route.name === 'list'
         ? listing(delivery, route)
         : delivery.findBySlug(route.contentType, route.slug, INCLUDE, route.slugField),
   ]);
+  const menus = { main, footer };
   const entry = preview?.entry ?? published;
   const notFound = !entry;
   // Redirects only ever apply to paths without a page, so they cost nothing on a hit.
@@ -96,13 +99,18 @@ export async function renderPage({
   }
   const codeBase = `/v/${env.BUILD_ID}`;
   const origin = env.SITE_ORIGIN || url.origin;
-  const etag = notFound ? null : await etagFor(env.BUILD_ID, entry, settings);
+  // Menus carry no publish time, so their whole content goes into the validator: a saved menu
+  // must not answer 304 with the old navigation.
+  const etag = notFound
+    ? null
+    : await etagFor(env.BUILD_ID, entry, settings, { id: 'menus', url: JSON.stringify(menus) });
+  const menuTag = main?.items?.length || footer?.items?.length ? ['menu'] : [];
   const headers = htmlHeaders({
     kind: preview ? 'preview' : notFound ? 'not-found' : 'page',
     tags:
       entry && 'listOf' in entry
-        ? [...tagsFor(entry, settings), `type:${entry.listOf}`]
-        : tagsFor(entry, settings),
+        ? [...tagsFor(entry, settings), `type:${entry.listOf}`, ...menuTag]
+        : [...tagsFor(entry, settings), ...menuTag],
     etag,
     codeBase,
     preconnect: assetOrigins(origin, entry),
@@ -116,6 +124,7 @@ export async function renderPage({
   const chunks = renderDocument({
     entry,
     settings,
+    menus,
     url: new URL(path, url.origin),
     origin,
     codeBase,

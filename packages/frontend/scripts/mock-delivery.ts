@@ -12,7 +12,24 @@ import { png } from './png.ts';
 
 const port = Number(process.argv[2] ?? 8788);
 const origin = `http://localhost:${port}`;
-const delivery = fakeDelivery(process.argv[3] === 'starter' ? { extra: starterByType() } : {});
+// Menus too, so the gate measures the header's dropdown and the footer's links.
+const menus = {
+  main: {
+    items: [
+      { id: 'blocks', label: 'Blocks', url: '/blocks', children: [] },
+      {
+        id: 'integrate',
+        label: 'Integrate',
+        url: '/integrate',
+        children: [{ id: 'blog', label: 'Blog', url: '/blog', children: [] }],
+      },
+    ],
+  },
+  footer: { items: [{ id: 'blog', label: 'Blog', url: '/blog', children: [] }] },
+};
+const delivery = fakeDelivery(
+  process.argv[3] === 'starter' ? { extra: starterByType(), menus } : { menus },
+);
 
 createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', origin);

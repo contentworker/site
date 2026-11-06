@@ -1,5 +1,5 @@
 import type { Backend } from './config.ts';
-import type { Entry } from './types.ts';
+import type { Entry, Menu } from './types.ts';
 
 /**
  * A small client for the ContentWorker Delivery API, in the spirit of `@contentworker/sdk/edge`:
@@ -113,6 +113,11 @@ export function createDelivery(cw: Backend, opts: { fetch?: typeof fetch } = {})
     async routes(): Promise<{ contentType: string; urlPattern: string }[] | null> {
       const res = await get<{ items?: { contentType: string; urlPattern: string }[] }>('/routes');
       return res?.items ?? null;
+    },
+
+    /** A navigation menu by handle, resolved for the locale; null when there's no such menu. */
+    async menu(handle: string): Promise<Menu | null> {
+      return get<Menu>(`/menus/${encodeURIComponent(handle)}`);
     },
 
     /** The first entry of a singleton type (siteSettings). */
