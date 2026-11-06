@@ -59,6 +59,30 @@ export interface ImageOptions {
 }
 
 /** What every block renderer receives (src/render/block-ctx.ts builds it). */
+/** A navigation menu item as Delivery serves it: resolved for one locale, dead links dropped. */
+export interface MenuItem {
+  id: string;
+  label: string;
+  url?: string | null;
+  target?: string;
+  attrs?: Record<string, string>;
+  entry?: { id: string; contentType: string };
+  children?: MenuItem[];
+}
+
+/** A navigation menu by handle. */
+export interface Menu {
+  handle?: string;
+  name?: string;
+  items: MenuItem[];
+}
+
+/** The menus the runtime reads: `main` for the header, `footer` for the footer. */
+export interface Menus {
+  main?: Menu | null;
+  footer?: Menu | null;
+}
+
 export interface RenderCtx {
   path: string;
   origin: string;
@@ -67,6 +91,8 @@ export interface RenderCtx {
   inFirstSection: boolean;
   lcpTaken: boolean;
   fragmentDepth: number;
+  /** The site's menus; a custom header or footer reads them here. */
+  menus: Menus;
   usedBlocks: Set<BlockModule>;
   raw: (markup: string) => Safe;
   safeHref: (uri: unknown) => string | null;

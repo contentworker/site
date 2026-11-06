@@ -242,9 +242,12 @@ export function fakeDelivery({
   fail = false,
   extra = {},
   routes,
+  menus = {},
 }: {
   fail?: boolean;
   extra?: Record<string, Entry[]>;
+  /** Delivery's menus by handle; absent, /menus/<handle> is a 404. */
+  menus?: Record<string, unknown>;
   /** Delivery's /routes answer; absent, /routes is a 404 (a ContentWorker without it). */
   routes?: { contentType: string; urlPattern: string }[];
 } = {}) {
@@ -264,6 +267,13 @@ export function fakeDelivery({
         (e) => !slug || e.fields.slug === slug,
       );
     if (type === 'article') items = [article].filter((e) => !slug || e.fields.slug === slug);
+    const menu = /\/menus\/([^/]+)$/.exec(url.pathname);
+    if (menu) {
+      const found = menus[decodeURIComponent(menu[1] ?? '')];
+      return found
+        ? Response.json(found)
+        : Response.json({ error: { code: 'not_found' } }, { status: 404 });
+    }
     if (url.pathname.endsWith('/routes')) {
       return routes
         ? Response.json({ items: routes, total: routes.length })

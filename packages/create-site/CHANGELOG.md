@@ -3,6 +3,10 @@
 `@contentworker/create-site` follows semantic versioning. Release it like the runtime: bump
 `version`, add its section here, merge, then push the tag `create-site@v<version>`.
 
+## 0.1.1
+
+- New sites use `@contentworker/frontend` 0.3.0: navigation menus.
+
 ## 0.1.0
 
 - `npm create @contentworker/site [dir]`: writes a site on `@contentworker/frontend`

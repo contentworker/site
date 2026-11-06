@@ -48,7 +48,7 @@ test('a signed entry.published enqueues the entry tag and cached 404s', async ()
     }),
   );
   assert.equal(res.status, 200);
-  assert.deepEqual(enqueued, [['e:p-about', 'notfound', 'type:page']]);
+  assert.deepEqual(enqueued, [['e:p-about', 'notfound', 'menu', 'type:page']]);
 });
 
 test('bad signatures, stale timestamps and missing secrets are refused', async () => {
@@ -68,9 +68,13 @@ test('bad signatures, stale timestamps and missing secrets are refused', async (
 test('events map to tags', () => {
   assert.deepEqual(
     tagsForEvent({ type: 'entry.unpublished', entryId: 'a', contentTypeApiId: 'redirect' }),
-    ['e:a', 'type:redirect'],
+    ['e:a', 'menu', 'type:redirect'],
   );
-  assert.deepEqual(tagsForEvent({ type: 'entry.published', entryId: 'a' }), ['e:a', 'notfound']);
+  assert.deepEqual(tagsForEvent({ type: 'entry.published', entryId: 'a' }), [
+    'e:a',
+    'notfound',
+    'menu',
+  ]);
   assert.deepEqual(tagsForEvent({ type: 'asset.rights_changed', assetId: 'x' }), ['e:x']);
   for (const type of [
     'entries.published_bulk',

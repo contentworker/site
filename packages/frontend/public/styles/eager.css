@@ -231,6 +231,12 @@ header {
   text-decoration: underline;
 }
 
+.nav-sub {
+  margin: 0;
+  padding: 0 0 0 16px;
+  list-style: none;
+}
+
 /* Mobile: the list shows when the <details> toggle is open. Desktop: always, toggle hidden. */
 @media (width < 900px) {
   .nav-sections {
@@ -256,6 +262,25 @@ header {
     display: flex;
     gap: 32px;
     padding: 0;
+  }
+
+  /* Sub-items drop down on hover and on keyboard focus; no JS. */
+  .nav-sections > li {
+    position: relative;
+  }
+
+  .nav-sub {
+    display: none;
+    position: absolute;
+    z-index: 1;
+    min-width: 200px;
+    padding: 8px 16px;
+    background-color: var(--background-color);
+  }
+
+  .nav-sections li:hover > .nav-sub,
+  .nav-sections li:focus-within > .nav-sub {
+    display: block;
   }
 }
 

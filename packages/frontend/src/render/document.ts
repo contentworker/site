@@ -1,6 +1,6 @@
 import { toClassName } from '../../public/scripts/shared.js';
 import { attrs, html, type Safe } from '../html.ts';
-import { type Entry, type RenderCtx, sectionsIn } from '../types.ts';
+import { type Entry, type Menus, type RenderCtx, sectionsIn } from '../types.ts';
 import { createRenderCtx } from './block-ctx.ts';
 import {
   BLOCKS,
@@ -26,6 +26,7 @@ import { renderRichText } from './richtext.ts';
 export interface DocumentInput {
   entry: Entry | null;
   settings: Entry | null;
+  menus?: Menus;
   url: URL;
   origin: string;
   codeBase: string;
@@ -35,8 +36,8 @@ export interface DocumentInput {
 }
 
 export async function* renderDocument(input: DocumentInput): AsyncGenerator<string> {
-  const { entry, settings, url, origin, codeBase, lang, notFound, preview } = input;
-  const ctx = createRenderCtx({ path: url.pathname, origin });
+  const { entry, settings, menus, url, origin, codeBase, lang, notFound, preview } = input;
+  const ctx = createRenderCtx({ path: url.pathname, origin, ...(menus ? { menus } : {}) });
 
   const sections = sectionsOf(entry);
   const firstMods = sections[0] ? modulesOf(sections[0]) : [];

@@ -30,6 +30,7 @@ Then `wrangler secret put CONTENTWORKER_KEY` (a Content Delivery API key).
 - **Theme:** `public/styles/site.css` overrides the CSS tokens. It's appended to the runtime's
   critical CSS when served, so it costs no extra request.
 - **Blocks:** `npx contentworker-site new-block <name> [--js]`.
+- **Navigation:** build the `main` and `footer` menus in ContentWorker (Settings → Menus).
 - **URLs:** set each content type's URL pattern in ContentWorker, or pass
   `defineSite({ routes })`.
 - **Any runtime file:** a file at the same path in your `public/` wins.

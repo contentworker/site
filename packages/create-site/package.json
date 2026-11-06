@@ -1,6 +1,6 @@
 {
   "name": "@contentworker/create-site",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "npm create @contentworker/site: a new ContentWorker site on @contentworker/frontend, ready to run, optionally with its content model and starter pages.",
   "keywords": [
     "contentworker",

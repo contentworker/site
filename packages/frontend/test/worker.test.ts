@@ -72,8 +72,8 @@ test('home renders complete HTML: head, header, sections, footer', async () => {
     /<\/main><link rel="stylesheet" href="\/v\/abc123\/blocks\/footer\/footer.css"><footer>/,
   );
   assert.ok(body.endsWith('</footer></body></html>'));
-  // Routes (once per isolate), settings and the page.
-  assert.ok(calls.length <= 3);
+  // Routes (once per isolate), settings, the page, and the two menus (in parallel, on a miss).
+  assert.ok(calls.length <= 5);
   assert.equal(calls.filter((c) => c.url.pathname.endsWith('/entries')).length, 2);
   for (const c of calls) {
     assert.equal(c.init.headers.authorization, 'Bearer cda_test');

@@ -9,6 +9,19 @@
   margin: 0 auto;
 }
 
+.footer-menu,
+.footer-sub {
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.footer-menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+}
+
 .footer-legal {
   color: var(--dark-color);
 }

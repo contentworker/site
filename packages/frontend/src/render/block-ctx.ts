@@ -1,6 +1,6 @@
 import { raw } from '../html.ts';
 import { pathFor } from '../routes.ts';
-import { isEntry, type RenderCtx } from '../types.ts';
+import { isEntry, type Menus, type RenderCtx } from '../types.ts';
 import { renderEmbedded } from './blocks.ts';
 import { image } from './image.ts';
 import { renderRichText, safeHref } from './richtext.ts';
@@ -13,13 +13,16 @@ import { renderRichText, safeHref } from './richtext.ts';
 export function createRenderCtx({
   path = '/',
   origin = '',
+  menus = {},
 }: {
   path?: string;
   origin?: string;
+  menus?: Menus;
 } = {}): RenderCtx {
   const ctx: RenderCtx = {
     path,
     origin,
+    menus,
     year: new Date().getUTCFullYear(),
     headingLevel: 1,
     inFirstSection: false,
