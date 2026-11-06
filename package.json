@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",
-    "wrangler": "4.156.1"
+    "wrangler": "4.156.2"
   },
   "workspaces": [
     "packages/*"
