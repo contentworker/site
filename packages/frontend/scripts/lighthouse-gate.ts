@@ -79,7 +79,21 @@ start('npx', [
 await waitFor(`http://localhost:${MOCK_PORT}/delivery/site/main/entries?content_type=siteSettings`);
 await waitFor(`${base}/health`);
 
-const chrome = await launch({ chromeFlags: ['--headless=new', '--no-sandbox'] });
+// Chrome sometimes never reports its debugging port on a busy CI runner. Only the launch is
+// retried: nothing has been measured yet, so a retry can't hide a score below 100.
+async function launchChrome(attempts = 3): Promise<Awaited<ReturnType<typeof launch>>> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await launch({ chromeFlags: ['--headless=new', '--no-sandbox'] });
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      console.error(`Chrome didn't start (attempt ${attempt} of ${attempts}): ${error}`);
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+  }
+}
+
+const chrome = await launchChrome();
 type Scores = Record<string, number>;
 interface Row {
   url: string;
