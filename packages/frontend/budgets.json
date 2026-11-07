@@ -17,6 +17,11 @@
       "max": 8192
     },
     {
+      "name": "preview JS (only /__preview, live)",
+      "files": ["scripts/live-preview.js"],
+      "max": 4096
+    },
+    {
       "name": "delayed JS",
       "files": ["scripts/delayed.js", "scripts/consent.js", "scripts/consented.js"],
       "max": 20480

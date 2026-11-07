@@ -3,7 +3,7 @@ import type { Delivery } from '../delivery.ts';
 import { htmlHeaders } from '../headers.ts';
 import type { RouteMatch } from '../routes.ts';
 import { match } from '../routes.ts';
-import type { Entry, SiteEnv } from '../types.ts';
+import type { Entry, PreviewState, SiteEnv } from '../types.ts';
 import { renderDocument } from './document.ts';
 
 /** Page → section → fragment → its sections → their assets (Delivery allows five). */
@@ -54,9 +54,6 @@ async function listing(
 /**
  * Renders one page as a streamed Response. Head and header go out as soon as they're rendered,
  * then one chunk per section, so first byte doesn't wait for the whole page.
- *
- * @param {{ env: any, ctx: ExecutionContext, url: URL, path: string, delivery: any,
- *   request: Request, preview?: { entry: any, path: string } }} input
  */
 export interface PageInput {
   env: SiteEnv;
@@ -65,7 +62,9 @@ export interface PageInput {
   path: string;
   delivery: Delivery;
   request: Request;
-  preview?: { entry: Entry | null; path: string } | undefined;
+  preview?: PreviewState | undefined;
+  /** The admin origin allowed to frame a preview render. */
+  admin?: string | null | undefined;
 }
 
 export async function renderPage({
@@ -76,6 +75,7 @@ export async function renderPage({
   delivery,
   request,
   preview,
+  admin = null,
 }: PageInput): Promise<Response> {
   const route = match(path);
   const [settings, main, footer, published] = await Promise.all([
@@ -114,6 +114,7 @@ export async function renderPage({
     etag,
     codeBase,
     preconnect: assetOrigins(origin, entry),
+    admin,
   });
   const status = notFound ? 404 : 200;
 

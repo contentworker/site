@@ -11,6 +11,12 @@
  * Preview reads drafts from the Preview API (the CMS's api host, not its delivery host). Over
  * HTTP it is derived: cdn.<domain> → api.<domain>. Set CONTENTWORKER_PREVIEW to its origin to
  * override that, or to enable preview when the backend is a bare namespace over a binding.
+ *
+ * Live preview frames /__preview pages in the ContentWorker admin, so those pages name the one
+ * origin allowed to frame them (CSP frame-ancestors). The admin is the deployment's own domain:
+ * cdn.<domain> → https://<domain>, or api.<domain> from CONTENTWORKER_PREVIEW. Set
+ * CONTENTWORKER_ADMIN to its origin to override that, or over a binding with no URL to derive
+ * from. Without one, preview pages can't be framed at all.
  */
 
 export class ConfigError extends Error {}
@@ -27,6 +33,8 @@ export interface Backend {
   base: string;
   /** The Preview API base for drafts, or null when preview isn't configured. */
   preview: string | null;
+  /** The admin's origin, the only one allowed to frame /__preview pages; null when unknown. */
+  admin: string | null;
   fetch: typeof fetch;
   space: string;
   environment: string;
@@ -78,9 +86,11 @@ export function backend(env: Partial<SiteEnv>): Backend {
     : null;
   if (!preview && origin && /^https?:\/\/cdn\./.test(origin))
     preview = origin.replace('//cdn.', '//api.');
+  const admin = adminOrigin(env.CONTENTWORKER_ADMIN, origin, preview);
   const key: string = env.CONTENTWORKER_KEY;
   const config: Backend = {
     preview: preview ? `${preview}/preview/${space}/${environment}` : null,
+    admin,
     transport: binding ? 'binding' : 'http',
     base: `${binding ? BINDING_ORIGIN : origin}/delivery/${space}/${environment}`,
     fetch: binding ? (u, i) => binding.fetch(u, i) : (u, i) => fetch(u, i),
@@ -91,4 +101,43 @@ export function backend(env: Partial<SiteEnv>): Backend {
   };
   memo.set(env, config);
   return config;
+}
+
+/**
+ * The admin origin: CONTENTWORKER_ADMIN, else the domain behind cdn.<domain> (the Delivery URL)
+ * or api.<domain> (the Preview API). Only an exact https origin is accepted (http only on
+ * localhost, as the live preview SDK requires); never a wildcard.
+ */
+function adminOrigin(
+  explicit: string | undefined,
+  delivery: string | null,
+  preview: string | null,
+): string | null {
+  if (explicit?.trim()) {
+    const value = explicit.trim().replace(/\/$/, '');
+    const origin = previewOrigin(value);
+    if (!origin || origin !== value || value.includes('*'))
+      throw new ConfigError(
+        `CONTENTWORKER_ADMIN must be an exact https origin like https://admin.example.com (http only on localhost), got "${explicit}".`,
+      );
+    return origin;
+  }
+  if (delivery && /^https?:\/\/cdn\./.test(delivery))
+    return previewOrigin(delivery.replace('//cdn.', '//'));
+  if (preview && /^https?:\/\/api\./.test(preview))
+    return previewOrigin(preview.replace('//api.', '//'));
+  return null;
+}
+
+/** The origin of an https URL (or http on localhost), or null. */
+function previewOrigin(value: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(url.hostname);
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local)) return null;
+  return url.origin;
 }

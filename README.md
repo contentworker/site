@@ -134,9 +134,35 @@ content and cached at the edge.
 ## Preview drafts
 
 Set the entry preview link in ContentWorker to
-`https://<your site>/__preview?entry={id}&token={token}`. Drafts render under `/__preview/…`,
-never cached and never indexed. If your Preview API isn't at `api.<domain>`, set
-`CONTENTWORKER_PREVIEW` to its origin.
+`https://<your site>/__preview?entry={id}#token={token}`. The token rides in the fragment, so it
+never reaches a server log or a `Referer`: the site answers a tiny page that reads it, removes it
+from the address bar and history, and trades it (a same-origin POST) for an HttpOnly cookie
+scoped to `/__preview`. The older `?entry={id}&token={token}` form still works. Drafts render
+under `/__preview/…`, never cached and never indexed. If your Preview API isn't at
+`api.<domain>`, set `CONTENTWORKER_PREVIEW` to its origin.
+
+### Live preview in the admin
+
+The ContentWorker admin frames `/__preview` pages and re-renders each unsaved edit in them.
+Preview responses may be framed by the admin's origin only (`Content-Security-Policy:
+frame-ancestors <admin>`) and send no `Referer`; public pages still refuse every frame but their
+own. The admin's origin comes from your backend setting: `cdn.<domain>` (or a
+`CONTENTWORKER_PREVIEW` of `api.<domain>`) means the admin is `https://<domain>`. Otherwise, or
+over a service binding with a bare namespace, set it:
+
+```jsonc
+"vars": { "CONTENTWORKER_ADMIN": "https://<your admin host>" }
+```
+
+It must be an exact https origin (http only on localhost); without one, preview pages can't be
+framed at all. The preview cookie is `SameSite=None; Secure; Partitioned`, so it works inside the
+admin's frame and lives only in the admin's partition there.
+
+Under `/__preview`, the draft's markup also says what is editable: `data-cw-slot` on the element
+holding a blocks field's blocks, `data-cw-block="<_key>"` on each block, and `data-cw-ref` on the
+page's own fields. Public pages carry none of it. With `cw_session` on the URL (the admin adds
+it), the page loads `scripts/live-preview.js`, which re-renders edited blocks through
+`POST /__preview/render`.
 
 ## Develop
 

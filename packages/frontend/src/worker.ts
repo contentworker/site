@@ -54,21 +54,34 @@ async function route(request: Request, env: SiteEnv, ctx: ExecutionContext): Pro
             ctx.exports.PurgeQueue.get(ctx.exports.PurgeQueue.idFromName('purge')).add(tags),
         });
       }
-      if (request.method !== 'GET' && request.method !== 'HEAD') {
+      const previewing = url.pathname === PREVIEW || url.pathname.startsWith(`${PREVIEW}/`);
+      // POST /__preview (the fragment handoff) and /__preview/render are the only other methods.
+      const read = request.method === 'GET' || request.method === 'HEAD';
+      if (!read && !(previewing && request.method === 'POST')) {
         return new Response('Method not allowed', {
           status: 405,
           headers: textHeaders({ allow: 'GET, HEAD' }),
         });
       }
-      if (url.pathname === PREVIEW || url.pathname.startsWith(`${PREVIEW}/`)) {
+      if (previewing) {
         const cw = backend(env);
         await ensureCmsRoutes(createDelivery(cw));
         return await handlePreview({
           request,
           url,
           cw,
+          site: { origin: env.SITE_ORIGIN || url.origin, codeBase: `/v/${env.BUILD_ID}` },
           render: ({ path, preview }) =>
-            renderPage({ env, ctx, url, path, request, preview, delivery: createDelivery(cw) }),
+            renderPage({
+              env,
+              ctx,
+              url,
+              path,
+              request,
+              preview,
+              admin: cw.admin,
+              delivery: createDelivery(cw),
+            }),
         });
       }
       if (!isVersioned(url.pathname)) {

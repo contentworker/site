@@ -11,6 +11,18 @@ tokens or options are **minor**; fixes that keep output stable are **patch**.
 Bump `version` in `package.json`, add its section here, merge, then push the tag
 `frontend@v<version>`: `release.yml` checks and publishes it to npm with provenance.
 
+## Unreleased
+
+- Preview links can carry the token in the fragment (`/__preview?entry={id}#token={token}`), so it
+  never reaches a log or a `Referer`; `?token=` still works.
+- Preview pages are ready to be framed by the ContentWorker admin: `frame-ancestors` names the
+  admin origin only (derived from `CONTENTWORKER`, or the new optional `CONTENTWORKER_ADMIN`),
+  `Referrer-Policy: no-referrer`, and the preview cookie is `SameSite=None; Secure; Partitioned`.
+- Under `/__preview` only, drafts carry `data-cw-slot`, `data-cw-block` and `data-cw-ref`;
+  `POST /__preview/render` re-renders blocks from unsaved fields; `scripts/live-preview.js` (a stub
+  until `@contentworker/sdk/live-preview` is published) loads when the URL has `cw_session`.
+  Public pages are unchanged.
+
 ## 0.3.0
 
 - Navigation menus: the header renders ContentWorker's `main` menu and the footer its `footer`
