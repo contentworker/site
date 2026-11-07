@@ -1,16 +1,16 @@
 /**
- * Browser-side loading utilities. The page is
- * complete before any of this runs: these functions only load optional block JS and late CSS.
+ * Browser-side enhancement. The page is complete before any of this runs: these functions only
+ * add optional block JS and late CSS.
  */
 
 /** The versioned code root (/v/<build>), derived from this module's own URL. */
-export const codeBasePath = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
+export const codeRoot = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 
 /**
  * Adds a stylesheet once. Resolves when it has loaded (or failed: a missing style must not block).
  * @param {string} href
  */
-export function loadCSS(href) {
+export function addStylesheet(href) {
   return /** @type {Promise<void>} */ (
     new Promise((resolve) => {
       if (document.querySelector(`link[rel="stylesheet"][href="${CSS.escape(href)}"]`)) {
@@ -49,7 +49,7 @@ const scriptPolicy = /** @type {Window & { trustedTypes?: TrustedTypes }} */ (
  * @param {string} src
  * @param {Record<string, string>} [attrs]
  */
-export function loadScript(src, attrs = {}) {
+export function addScript(src, attrs = {}) {
   return /** @type {Promise<void>} */ (
     new Promise((resolve, reject) => {
       if (document.querySelector(`script[src="${CSS.escape(src)}"]`)) {
@@ -71,57 +71,54 @@ export function loadScript(src, attrs = {}) {
  * cost no request. CSS is normally linked by the Worker already; this covers blocks added later.
  * @param {HTMLElement} block
  */
-export async function loadBlock(block) {
-  const { blockName, blockStatus, blockJs, blockCss } = block.dataset;
-  if (!blockName || blockStatus === 'loading' || blockStatus === 'loaded') return block;
-  block.dataset.blockStatus = 'loading';
+export async function enhanceBlock(block) {
+  const { block: name, blockState, blockJs, blockCss } = block.dataset;
+  if (!name || blockState === 'running' || blockState === 'done') return block;
+  block.dataset.blockState = 'running';
   try {
-    const base = `${codeBasePath}/blocks/${blockName}/${blockName}`;
-    const css = blockCss === '0' ? Promise.resolve() : loadCSS(`${base}.css`);
+    const base = `${codeRoot}/blocks/${name}/${name}`;
+    const css = blockCss === '0' ? Promise.resolve() : addStylesheet(`${base}.css`);
     const js =
       blockJs === '0'
         ? Promise.resolve()
         : import(`${base}.js`).then((mod) => mod.default?.(block));
     await Promise.all([css, js]);
   } catch (error) {
-    console.error(`block ${blockName} failed to load`, error);
+    console.error(`block ${name} failed to load`, error);
   }
-  block.dataset.blockStatus = 'loaded';
+  block.dataset.blockState = 'done';
   return block;
 }
 
 /**
- * Loads every block in a section, in order.
+ * Enhances every block in a section, in order.
  * @param {HTMLElement} section
  * @param {(section: HTMLElement) => Promise<void>} [after]
  */
-export async function loadSection(section, after) {
-  if (
-    !section ||
-    (section.dataset.sectionStatus && section.dataset.sectionStatus !== 'initialized')
-  )
+export async function enhanceSection(section, after) {
+  if (!section || (section.dataset.sectionState && section.dataset.sectionState !== 'pending'))
     return;
-  section.dataset.sectionStatus = 'loading';
-  for (const block of section.querySelectorAll(/** @type {'div'} */ ('.block[data-block-name]'))) {
-    await loadBlock(block);
+  section.dataset.sectionState = 'running';
+  for (const block of section.querySelectorAll(/** @type {'div'} */ ('.block[data-block]'))) {
+    await enhanceBlock(block);
   }
   if (after) await after(section);
-  section.dataset.sectionStatus = 'loaded';
+  section.dataset.sectionState = 'done';
 }
 
 /** @param {ParentNode} root */
-export async function loadSections(root) {
+export async function enhanceSections(root) {
   for (const section of root.querySelectorAll(/** @type {'section'} */ ('.section'))) {
-    await loadSection(section);
+    await enhanceSection(section);
   }
 }
 
 /**
- * Waits for the section's first image. The Worker already marked it eager/high priority in the
- * HTML; this only holds the lazy phase back until the LCP image is in.
+ * Waits for the section's first image. The Worker already marked it high priority in the HTML;
+ * this only holds the deferred phase back until the LCP image is in.
  * @param {HTMLElement} section
  */
-export function waitForFirstImage(section) {
+export function firstImageReady(section) {
   const img = section.querySelector('img');
   if (!img || img.complete) return Promise.resolve();
   return new Promise((resolve) => {

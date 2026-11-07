@@ -57,14 +57,14 @@ test('home renders complete HTML: head, header, sections, footer', async () => {
   assert.match(body.split('</head>')[0] ?? '', /href="\/v\/abc123\/blocks\/hero\/hero.css"/);
   assert.match(
     body,
-    /<div class="hero block" data-block-name="hero" data-block-status="loaded" data-block-js="0">/,
+    /<div class="hero block" data-block="hero" data-block-state="done" data-block-js="0">/,
   );
   assert.equal((body.match(/fetchpriority="high"/g) ?? []).length, 1);
   assert.match(
     body,
-    /<p class="button-wrapper"><a href="\/docs" class="button primary">Read the getting-started guide<\/a><\/p>/,
+    /<p class="cta-row"><a href="\/docs" class="button primary">Read the getting-started guide<\/a><\/p>/,
   );
-  assert.match(body, /<div class="default-content-wrapper"><h2>Why &lt;fast&gt;<\/h2>/);
+  assert.match(body, /<div class="prose"><h2>Why &lt;fast&gt;<\/h2>/);
   assert.match(body, /<li><a href="\/docs">Docs<\/a><\/li>/);
   assert.doesNotMatch(body, /javascript:/);
   assert.match(
@@ -94,7 +94,7 @@ test('pages are edge-cached for a day, tagged with everything they used, revalid
   assert.match(res.headers.get('etag') ?? '', /^"[0-9a-f]{24}"$/);
   assert.match(
     res.headers.get('link') ?? '',
-    /^<\/v\/abc123\/styles\/eager.css>; rel=preload; as=style, <https:\/\/media.example>; rel=preconnect$/,
+    /^<\/v\/abc123\/styles\/critical.css>; rel=preload; as=style, <https:\/\/media.example>; rel=preconnect$/,
   );
   assert.equal(res.headers.get('speculation-rules'), '"/v/abc123/speculation-rules.json"');
 });
@@ -122,8 +122,8 @@ test('CSP allows only same-origin scripts, with Trusted Types; no nonce in cache
   assert.match(csp, /require-trusted-types-for 'script'/);
   assert.match(csp, /trusted-types loader/);
   assert.doesNotMatch(body, /nonce/);
-  assert.match(body, /<script type="module" src="\/v\/abc123\/scripts\/site.js"><\/script>/);
-  assert.match(body, /<link rel="modulepreload" href="\/v\/abc123\/scripts\/lib.js">/);
+  assert.match(body, /<script type="module" src="\/v\/abc123\/scripts\/boot.js"><\/script>/);
+  assert.match(body, /<link rel="modulepreload" href="\/v\/abc123\/scripts\/enhance.js">/);
   assert.ok(res.headers.get('strict-transport-security'));
 });
 
@@ -163,10 +163,10 @@ test('HEAD answers with headers only', async () => {
 });
 
 test('versioned code URLs are immutable; speculation rules get their media type', async () => {
-  const { res } = await get('/v/abc123/styles/eager.css');
+  const { res } = await get('/v/abc123/styles/critical.css');
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('cache-control'), 'public, max-age=31536000, immutable');
-  const old = await get('/v/oldbuild/styles/eager.css');
+  const old = await get('/v/oldbuild/styles/critical.css');
   assert.equal(old.res.headers.get('cache-control'), 'public, max-age=60');
   assert.equal(old.res.headers.get('cloudflare-cdn-cache-control'), 'no-store');
   const rules = await get('/v/abc123/speculation-rules.json');

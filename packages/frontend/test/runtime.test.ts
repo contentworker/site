@@ -26,8 +26,8 @@ async function get(
 
 test('a site with no files of its own serves the runtime’s scripts, styles and block CSS', async () => {
   for (const [path, type] of [
-    ['/v/abc123/scripts/site.js', 'text/javascript; charset=utf-8'],
-    ['/v/abc123/styles/eager.css', 'text/css; charset=utf-8'],
+    ['/v/abc123/scripts/boot.js', 'text/javascript; charset=utf-8'],
+    ['/v/abc123/styles/critical.css', 'text/css; charset=utf-8'],
     ['/v/abc123/blocks/cards/cards.css', 'text/css; charset=utf-8'],
     ['/v/abc123/speculation-rules.json', 'application/speculationrules+json'],
   ] as const) {
@@ -48,13 +48,13 @@ test('a site with no files of its own serves the runtime’s scripts, styles and
 test('the site’s own file wins over the runtime’s at the same path', async () => {
   const ASSETS = {
     fetch: async (r: Request) =>
-      new URL(r.url).pathname === '/styles/eager.css'
+      new URL(r.url).pathname === '/styles/critical.css'
         ? new Response(':root{--x:1}')
         : new Response('', { status: 404 }),
   };
-  const own = await get('/v/abc123/styles/eager.css', { ASSETS });
+  const own = await get('/v/abc123/styles/critical.css', { ASSETS });
   assert.equal(own.body, ':root{--x:1}');
-  const fallback = await get('/v/abc123/styles/lazy.css', { ASSETS });
+  const fallback = await get('/v/abc123/styles/deferred.css', { ASSETS });
   assert.match(fallback.body, /table/);
 });
 
@@ -178,27 +178,27 @@ test('routes load from the CMS (Delivery /routes); without the endpoint, default
   }
 });
 
-test('theming: the site’s styles/site.css is appended to eager.css, in the same response', async () => {
-  const siteCss = ':root{--link-color:#0b6e4f}';
+test('theming: the site’s styles/site.css is appended to critical.css, in the same response', async () => {
+  const siteCss = ':root{--color-link:#0b6e4f}';
   const ASSETS = {
     fetch: async (r: Request) =>
       new URL(r.url).pathname === '/styles/site.css'
         ? new Response(siteCss)
         : new Response('', { status: 404 }),
   };
-  const themed = await get('/v/abc123/styles/eager.css', { ASSETS });
+  const themed = await get('/v/abc123/styles/critical.css', { ASSETS });
   assert.equal(themed.res.status, 200);
-  assert.match(themed.body, /--link-color: #2448d8/, 'runtime tokens first');
+  assert.match(themed.body, /--color-link: #2448d8/, 'runtime tokens first');
   assert.ok(themed.body.endsWith(`/* site.css */\n${siteCss}`), 'site tokens last, so they win');
   assert.equal(themed.res.headers.get('content-type'), 'text/css; charset=utf-8');
   assert.equal(themed.res.headers.get('cache-control'), 'public, max-age=31536000, immutable');
-  const plain = await get('/v/abc123/styles/eager.css');
+  const plain = await get('/v/abc123/styles/critical.css');
   assert.doesNotMatch(plain.body, /site\.css \*\//, 'no site.css, no change');
-  // A site that ships its own eager.css gets exactly that file.
-  const own = await get('/v/abc123/styles/eager.css', {
+  // A site that ships its own critical.css gets exactly that file.
+  const own = await get('/v/abc123/styles/critical.css', {
     ASSETS: {
       fetch: async (r: Request) =>
-        new Response(new URL(r.url).pathname === '/styles/eager.css' ? 'mine' : siteCss),
+        new Response(new URL(r.url).pathname === '/styles/critical.css' ? 'mine' : siteCss),
     },
   });
   assert.equal(own.body, 'mine');

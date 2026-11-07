@@ -11,6 +11,32 @@ tokens or options are **minor**; fixes that keep output stable are **patch**.
 Bump `version` in `package.json`, add its section here, merge, then push the tag
 `frontend@v<version>`: `release.yml` checks and publishes it to npm with provenance.
 
+## 0.4.0
+
+**Breaking** for sites that override a runtime file, target its markup, or set CSS tokens. The
+runtime's names are now its own:
+
+| Was                                                                        | Now                                                                         |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `styles/eager.css`, `styles/lazy.css`                                      | `styles/critical.css`, `styles/deferred.css`                                |
+| `scripts/lib.js`, `scripts/site.js`, `scripts/delayed.js`                  | `scripts/enhance.js`, `scripts/boot.js`, `scripts/idle.js`                  |
+| `loadCSS`, `loadScript`                                                    | `addStylesheet`, `addScript`                                                |
+| `loadBlock`, `loadSection`, `loadSections`                                 | `enhanceBlock`, `enhanceSection`, `enhanceSections`                         |
+| `codeBasePath`, `toClassName`, `waitForFirstImage`                         | `codeRoot`, `classNameOf`, `firstImageReady`                                |
+| `data-block-name`, `data-block-status`, `data-section-status`              | `data-block`, `data-block-state`, `data-section-state`                      |
+| states `initialized`, `loading`, `loaded`                                  | `pending`, `running`, `done`                                                |
+| `.default-content-wrapper`, `.button-wrapper`                              | `.prose`, `.cta-row`                                                        |
+| `.<block>-container`, `.<block>-wrapper`                                   | `.with-<block>`, `.<block>-frame`                                           |
+| `--background-color`, `--text-color`, `--link-color`, `--link-hover-color` | `--color-bg`, `--color-text`, `--color-link`, `--color-link-hover`          |
+| `--light-color`, `--dark-color`, `--on-accent-color`, `--on-image-color`   | `--color-surface`, `--color-muted`, `--color-on-accent`, `--color-on-image` |
+| `--body-font-family`, `--heading-font-family`, `--mono-font-family`        | `--font-body`, `--font-heading`, `--font-mono`                              |
+| `--body-font-size-*`, `--heading-font-size-*`                              | `--text-*`, `--heading-*`                                                   |
+
+- A site's `public/styles/site.css` keeps its name and its place. `npx contentworker-site new-block`
+  now writes `export default function enhance(block)`; existing block scripts keep working, because
+  the runtime calls the default export whatever its name.
+- Depends on `@contentworker/sdk` `^0.2.0`.
+
 ## 0.3.0
 
 - Navigation menus: the header renders ContentWorker's `main` menu and the footer its `footer`

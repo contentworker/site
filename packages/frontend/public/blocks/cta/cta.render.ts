@@ -19,7 +19,7 @@ export default function render(entry: Entry, ctx: RenderCtx): Safe {
   ctx.headingLevel = 2;
   return html`<div class="cta-body">${heading ? html`<h2>${heading}</h2>` : ''}${body ? ctx.richText(body) : ''}${
     href && label
-      ? html`<p class="button-wrapper"><a class="button ${v}" href="${href}">${label}</a></p>`
+      ? html`<p class="cta-row"><a class="button ${v}" href="${href}">${label}</a></p>`
       : ''
   }</div>`;
 }

@@ -7,7 +7,7 @@
  * @param {string} name
  * @returns {string}
  */
-export function toClassName(name) {
+export function classNameOf(name) {
   return typeof name === 'string'
     ? name
         .toLowerCase()

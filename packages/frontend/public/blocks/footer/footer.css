@@ -1,7 +1,7 @@
 .footer {
   padding: 40px 24px;
-  background-color: var(--light-color);
-  font-size: var(--body-font-size-s);
+  background-color: var(--color-surface);
+  font-size: var(--text-s);
 }
 
 .footer-body {
@@ -23,5 +23,5 @@
 }
 
 .footer-legal {
-  color: var(--dark-color);
+  color: var(--color-muted);
 }

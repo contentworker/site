@@ -8,15 +8,15 @@
   width: 100%;
   height: auto;
   border-radius: 12px;
-  background-color: var(--light-color);
+  background-color: var(--color-surface);
 }
 
 .media figcaption {
   margin-top: 8px;
-  color: var(--dark-color);
-  font-size: var(--body-font-size-s);
+  color: var(--color-muted);
+  font-size: var(--text-s);
 }
 
 .media-credit {
-  font-size: var(--body-font-size-xs);
+  font-size: var(--text-xs);
 }
