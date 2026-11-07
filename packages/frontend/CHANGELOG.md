@@ -25,8 +25,8 @@ runtime's names are now its own:
 | `codeBasePath`, `toClassName`, `waitForFirstImage`                         | `codeRoot`, `classNameOf`, `firstImageReady`                                |
 | `data-block-name`, `data-block-status`, `data-section-status`              | `data-block`, `data-block-state`, `data-section-state`                      |
 | states `initialized`, `loading`, `loaded`                                  | `pending`, `running`, `done`                                                |
-| `.default-content-wrapper`, `.button-wrapper` | `.prose`, `.cta-row` |
-| `.<block>-container`, `.<block>-wrapper` | `.with-<block>`, `.<block>-frame` |
+| `.default-content-wrapper`, `.button-wrapper`                              | `.prose`, `.cta-row`                                                        |
+| `.<block>-container`, `.<block>-wrapper`                                   | `.with-<block>`, `.<block>-frame`                                           |
 | `--background-color`, `--text-color`, `--link-color`, `--link-hover-color` | `--color-bg`, `--color-text`, `--color-link`, `--color-link-hover`          |
 | `--light-color`, `--dark-color`, `--on-accent-color`, `--on-image-color`   | `--color-surface`, `--color-muted`, `--color-on-accent`, `--color-on-image` |
 | `--body-font-family`, `--heading-font-family`, `--mono-font-family`        | `--font-body`, `--font-heading`, `--font-mono`                              |
