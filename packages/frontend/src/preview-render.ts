@@ -1,6 +1,7 @@
 import type { Backend } from './config.ts';
 import { previewHeaders, textHeaders } from './headers.ts';
 import { fetchDraft, jsonBody, readCookie } from './preview.ts';
+import { stayInPreview } from './preview-links.ts';
 import { createRenderCtx } from './render/block-ctx.ts';
 import { type MainPart, mainParts, marksFor } from './render/document.ts';
 import { pathFor } from './routes.ts';
@@ -24,6 +25,8 @@ import type { Entry } from './types.ts';
  * the fields no longer render (removed, or not there yet), a key on more than one block, or the
  * first section (it decides the page's h1 and every heading level after it). A block that renders
  * to nothing answers `html: ""`. `css` is every block stylesheet the HTML needs.
+ *
+ * `session`, the page's `cw_session`, keeps links in the HTML inside the live preview session.
  *
  * `locale`, when given, must be the site's own (CONTENTWORKER_LOCALE): the page renders one
  * locale, and its refs and links say which.
@@ -68,7 +71,7 @@ export async function renderPreviewBlocks({
 }: RenderDeps): Promise<Response> {
   const read = await jsonBody(request, url, admin, MAX_RENDER_BYTES);
   if ('refused' in read) return read.refused;
-  const { entryId, fields, locale, keys } = read.body;
+  const { entryId, fields, locale, keys, session } = read.body;
   if (typeof entryId !== 'string' || !isRecord(fields))
     return json(admin, { error: 'Send entryId and fields.' }, 400);
   if (locale !== undefined && (typeof locale !== 'string' || !locale || FORBIDDEN.has(locale)))
@@ -82,6 +85,8 @@ export async function renderPreviewBlocks({
     )
   )
     return json(admin, { error: `keys must be at most ${MAX_KEYS} block keys.` }, 400);
+  if (session !== undefined && session !== null && !isSession(session))
+    return json(admin, { error: "session must be the page's cw_session." }, 400);
   if (locale !== undefined && locale !== cw.locale)
     return json(admin, { error: `This site renders ${cw.locale}; send that locale.` }, 422);
 
@@ -114,9 +119,14 @@ export async function renderPreviewBlocks({
     return json(admin, { error: 'These fields could not be rendered.' }, 422);
   }
 
+  // The page's links stay in its live preview session, as the page's own render keeps them.
+  const links = (h: string) =>
+    typeof session === 'string' && admin
+      ? stayInPreview(h, { origins: [...new Set([site.origin, url.origin])], session })
+      : h;
   const whole = () =>
     json(admin, {
-      main: parts.map((p) => p.html).join(''),
+      main: links(parts.map((p) => p.html).join('')),
       css: [...new Set(parts.flatMap((p) => p.needs))],
     });
   if (!Array.isArray(keys)) return whole();
@@ -129,12 +139,15 @@ export async function renderPreviewBlocks({
     found.push({ key, part });
   }
   return json(admin, {
-    blocks: found.map(({ key, part }) => ({ key, html: part.section })),
+    blocks: found.map(({ key, part }) => ({ key, html: links(part.section) })),
     css: [...new Set(found.flatMap(({ part }) => part.needs))],
   });
 }
 
 class TooLarge extends Error {}
+
+const isSession = (value: unknown): value is string =>
+  typeof value === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(value);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

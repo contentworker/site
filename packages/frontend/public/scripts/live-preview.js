@@ -157,6 +157,7 @@ async function draw(fields, update, signal, stale) {
     body: JSON.stringify({
       entryId: update.entryId,
       locale: update.locale,
+      session: new URL(window.location.href).searchParams.get('cw_session'),
       fields,
       ...(keys ? { keys } : {}),
     }),

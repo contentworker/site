@@ -164,8 +164,11 @@ Under `/__preview`, the draft's markup also says what is editable: `data-cw-slot
 holding a blocks field's blocks, `data-cw-block="<_key>"` on each block, and `data-cw-ref` on the
 page's own fields. Public pages carry none of it. With `cw_session` on the URL (the admin adds
 it), the page loads `scripts/live-preview.js`, which re-renders edited blocks through
-`POST /__preview/render` in the site's locale (`CONTENTWORKER_LOCALE`), and the preview bar drops
-its exit link: the admin has its own controls, and public pages can't load inside its frame.
+`POST /__preview/render` in the site's locale (`CONTENTWORKER_LOCALE`). Inside a session, links
+to the site's own pages become `/__preview/<path>?cw_session=…`, so browsing in the admin's frame
+shows drafts where they exist and published content elsewhere; external, `mailto:`, `tel:` and
+fragment links are left alone. The preview bar drops its exit link there: the admin has its own
+controls, and public pages can't load inside its frame.
 
 ## Develop
 

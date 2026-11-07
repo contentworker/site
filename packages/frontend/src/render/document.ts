@@ -1,6 +1,7 @@
 import { toClassName } from '../../public/scripts/shared.js';
 import { type ContentRef, formatContentRef } from '../content-ref.ts';
 import { attrs, html, type Safe } from '../html.ts';
+import { stayInPreview } from '../preview-links.ts';
 import {
   blockKey,
   type Entry,
@@ -45,6 +46,17 @@ export interface DocumentInput {
 }
 
 export async function* renderDocument(input: DocumentInput): AsyncGenerator<string> {
+  const session = input.preview?.session;
+  if (!session) {
+    yield* renderPage(input);
+    return;
+  }
+  // Framed for a live preview session: links to the site's pages stay in preview.
+  const origins = [...new Set([input.origin, input.url.origin])];
+  for await (const chunk of renderPage(input)) yield stayInPreview(chunk, { origins, session });
+}
+
+async function* renderPage(input: DocumentInput): AsyncGenerator<string> {
   const { entry, settings, menus, url, origin, codeBase, lang, notFound, preview } = input;
   const ctx = createRenderCtx({ path: url.pathname, origin, ...(menus ? { menus } : {}) });
 
@@ -72,7 +84,7 @@ export async function* renderDocument(input: DocumentInput): AsyncGenerator<stri
       .value;
   }
   yield '</head><body>';
-  if (preview?.live) {
+  if (preview?.session) {
     // Framed by the admin, which has its own controls: an exit link would load a public page,
     // and public pages refuse to be framed.
     yield html`<div class="preview-bar" role="status">Previewing a draft.</div>`.value;

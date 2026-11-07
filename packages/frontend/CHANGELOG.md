@@ -25,6 +25,8 @@ Bump `version` in `package.json`, add its section here, merge, then push the tag
 - Grants also clear the unpartitioned `SameSite=Lax` cookie earlier releases set; a preview link
   sets the cookie only for a navigation; `/__preview/exit?to=` goes only to a path on the site.
 - A malformed `CONTENTWORKER_ADMIN` is logged and turns framing off instead of failing renders.
+- In a live preview session, links to the site's pages stay under `/__preview` with the session,
+  in page renders and in re-rendered blocks.
 
 ## 0.3.0
 

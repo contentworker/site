@@ -216,4 +216,9 @@ export interface PreviewState {
   scope?: { space: string; environment: string; locale: string } | undefined;
   /** Set when the admin frames the page for a live preview session: the origin it listens to. */
   live?: { admin: string } | null | undefined;
+  /**
+   * The live preview session (`cw_session`) the admin framed the page with, draft shown or not:
+   * links to the site's pages carry it and stay under /__preview (src/preview-links.ts).
+   */
+  session?: string | null | undefined;
 }

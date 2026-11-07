@@ -348,6 +348,7 @@ export async function handlePreview(deps: PreviewDeps): Promise<Response> {
       path,
       scope: { space: cw.space, environment: cw.environment, locale: cw.locale },
       live: entry && session && admin ? { admin } : null,
+      session: session && admin ? session : null,
     },
   });
 }
