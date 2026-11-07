@@ -25,7 +25,7 @@ import {
  * The block registry. A block is a folder in public/blocks/<name>/ with:
  *   <name>.render.js  server half: entry → semantic HTML (imported here, never served)
  *   <name>.css        styles, linked by the Worker just before the block's section
- *   <name>.js         optional client enhancement, loaded by scripts/lib.js `loadBlock`
+ *   <name>.js         optional client enhancement, loaded by scripts/enhance.js `enhanceBlock`
  * Each render module exports `name`, `contentType`, `css` and `js` (booleans) and a default
  * `render(entry, ctx)`. `npm run new-block <name>` scaffolds one and registers it here.
  * Optional exports: `markdown(entry, ctx)` for the Markdown twin, `structuredData(entry)` for
@@ -55,8 +55,8 @@ export const DEFAULT_CONTENT = 'richText';
 export function blockShell(mod: Pick<BlockModule, 'name' | 'css' | 'js'>, inner: Safe): Safe {
   return html`<div${attrs({
     class: `${mod.name} block`,
-    'data-block-name': mod.name,
-    'data-block-status': mod.js ? 'initialized' : 'loaded',
+    'data-block': mod.name,
+    'data-block-state': mod.js ? 'pending' : 'done',
     'data-block-js': mod.js ? null : '0',
     'data-block-css': mod.css ? null : '0',
   })}>${inner}</div>`;

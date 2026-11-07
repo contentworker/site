@@ -21,7 +21,7 @@ test('a page that starts with a block gets its h1 from the page title, and headi
   assert.equal((body.match(/<h1>/g) ?? []).length, 1);
   assert.match(
     body,
-    /<main id="main"><section class="section page-head"><div class="default-content-wrapper"><h1>Blocks<\/h1>/,
+    /<main id="main"><section class="section page-head"><div class="prose"><h1>Blocks<\/h1>/,
   );
   const levels = [...body.matchAll(/<h([1-6])>/g)].map((m) => Number(m[1]));
   for (let i = 1; i < levels.length; i += 1)
@@ -36,21 +36,21 @@ test('a page of blocks renders each block finished, with its CSS linked before i
   assert.match(body.split('</head>')[0] ?? '', /blocks\/cards\/cards.css/);
   assert.match(
     body,
-    /<link rel="stylesheet" href="\/v\/abc123\/blocks\/columns\/columns.css"><section class="section columns-container"/,
+    /<link rel="stylesheet" href="\/v\/abc123\/blocks\/columns\/columns.css"><section class="section with-columns"/,
   );
   // Blocks inside a fragment get their CSS too, and the fragment's blocks render in place.
   assert.match(
     body,
-    /blocks\/cta\/cta.css">.*blocks\/faq\/faq.css"><section class="section fragment-container"/s,
+    /blocks\/cta\/cta.css">.*blocks\/faq\/faq.css"><section class="section with-fragment"/s,
   );
   assert.match(
     body,
-    /<div class="cta block"[^>]*><div class="cta-body"><h2>Start now<\/h2><p class="button-wrapper"><a class="button primary" href="\/docs">Get started<\/a>/,
+    /<div class="cta block"[^>]*><div class="cta-body"><h2>Start now<\/h2><p class="cta-row"><a class="button primary" href="\/docs">Get started<\/a>/,
   );
   // Every block in the starter works without JS.
   assert.doesNotMatch(
     body,
-    /data-block-status="initialized"[^>]*data-block-name="(cards|columns|faq|cta|media|fragment)"/,
+    /data-block-state="pending"[^>]*data-block="(cards|columns|faq|cta|media|fragment)"/,
   );
   assert.equal((body.match(/data-block-js="0"/g) ?? []).length >= 6, true);
 });
@@ -148,10 +148,7 @@ test('/blog lists articles newest first with an h1; unknown pages 404', async ()
   const { res, body } = await get('/blog');
   assert.equal(res.status, 200);
   assert.match(body, /<title>Blog · ContentWorker<\/title>/);
-  assert.match(
-    body,
-    /<section class="section listing-head"><div class="default-content-wrapper"><h1>Blog<\/h1>/,
-  );
+  assert.match(body, /<section class="section listing-head"><div class="prose"><h1>Blog<\/h1>/);
   assert.match(
     body,
     /<li><article><h2><a href="\/blog\/edge-rendering">Edge rendering, explained<\/a><\/h2><p class="article-list-date"><time datetime="2026-10-31T09:00:00Z">2026-10-31<\/time>/,
@@ -174,7 +171,7 @@ test('blocks-field sections ({ _type, _key, …fields }) render like linked bloc
   assert.equal(res.status, 200);
   assert.match(
     body,
-    /<section class="section hero-container"[^>]*><div class="hero-wrapper"><div class="hero block"[^>]*><picture><img src="https:\/\/media.example\/a-inline\/w960\/a-inline.jpg"/,
+    /<section class="section with-hero"[^>]*><div class="hero-frame"><div class="hero block"[^>]*><picture><img src="https:\/\/media.example\/a-inline\/w960\/a-inline.jpg"/,
   );
   assert.match(body, /<h1>Inline hero<\/h1>/);
   assert.match(body, /<details class="faq-item"><summary><h3>Inline\?<\/h3><\/summary>/);

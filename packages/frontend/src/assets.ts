@@ -3,9 +3,9 @@ import { IMMUTABLE } from './cache-policy.ts';
 import type { SiteEnv } from './types.ts';
 
 /**
- * Versioned code URLs. Pages reference /v/<BUILD_ID>/scripts/site.js and so on; this strips the
+ * Versioned code URLs. Pages reference /v/<BUILD_ID>/scripts/boot.js and so on; this strips the
  * prefix and serves the file from the static assets as immutable. Relative imports inside the
- * modules (./lib.js, ../blocks/…) resolve under the same prefix, so every code file a page loads
+ * modules (./enhance.js, ../blocks/…) resolve under the same prefix, so every code file a page loads
  * is versioned with no build step: the base path, derived from import.meta.url, does cache
  * busting too.
  */
@@ -28,9 +28,9 @@ export async function serveVersioned(request: Request, env: SiteEnv, url: URL): 
   let res = own?.ok ? own : embedded(rest);
   if (!res) return own ?? new Response('Not found', { status: 404 });
   // Theming: the site's public/styles/site.css (tokens, fonts, colours) rides on the end of the
-  // runtime's eager.css, so it costs no extra request and its rules win. A site that replaced
-  // eager.css outright keeps exactly its own file.
-  if (rest === EAGER_CSS && !own?.ok && env.ASSETS)
+  // runtime's critical.css, so it costs no extra request and its rules win. A site that replaced
+  // critical.css outright keeps exactly its own file.
+  if (rest === CRITICAL_CSS && !own?.ok && env.ASSETS)
     res = await withSiteCss(res, env.ASSETS, request, url);
   const headers = new Headers(res.headers);
   // A request for another build (a page cached across a deploy) gets today's file, so it must
@@ -46,7 +46,7 @@ export async function serveVersioned(request: Request, env: SiteEnv, url: URL): 
   return new Response(res.body, { status: res.status, headers });
 }
 
-const EAGER_CSS = '/styles/eager.css';
+const CRITICAL_CSS = '/styles/critical.css';
 export const SITE_CSS = '/styles/site.css';
 
 async function withSiteCss(

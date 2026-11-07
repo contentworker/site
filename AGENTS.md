@@ -54,25 +54,25 @@ Performance is the top priority: every other requirement yields to it.
 - **The HTML is finished at first byte.** Sections, wrappers, buttons, image attributes and the
   LCP choice are decided in the Worker. Block JS may add behaviour, elements and attributes; it
   may never move, hide or remove server content (CLS 0, and the page reads with JS off).
-- **Three phases** (`public/scripts/site.js`). Eager: the first section's block JS. Lazy: the
-  remaining blocks, `lazy.css`, fonts. Delayed (3 s after load): analytics, consent, third
+- **Three phases** (`public/scripts/boot.js`). Critical: the first section's block JS. Deferred: the
+  remaining blocks, `deferred.css`, fonts. Idle (3 s after load): analytics, consent, third
   parties. Nothing third-party loads before `load`.
 - **Sites theme through tokens, not by forking files.** A site's `public/styles/site.css` is
-  appended to `eager.css` by `src/assets.ts`. Give new styling a CSS token so sites can change it
+  appended to `critical.css` by `src/assets.ts`. Give new styling a CSS token so sites can change it
   there; renaming or removing a token is a major version (`CHANGELOG.md`).
 - **The package is the product.** `npm pack` must keep working: the CLI (`scripts/cli.ts` and what
   it imports) is compiled to `dist/` by `npm run build` because Node won't strip types in
   `node_modules`; Worker code ships as TypeScript. Never import Worker modules into the CLI's graph.
-- **Anything that changes layout is in `eager.css` or the block's CSS, never `lazy.css`.** Late
+- **Anything that changes layout is in `critical.css` or the block's CSS, never `deferred.css`.** Late
   CSS that resizes something in the first viewport is a layout shift (the gate caught one).
-- **Only `styles/eager.css` (and the first section's block CSS) may block rendering.** A later
+- **Only `styles/critical.css` (and the first section's block CSS) may block rendering.** A later
   block's CSS is linked in the body just before its section.
 - **Lighthouse 100 is a gate, not a goal.** CI's `lighthouse` job runs Lighthouse 13 (what
   PageSpeed Insights runs) on the real Worker under `wrangler dev` against
   `scripts/mock-delivery.ts`, and fails the PR below 100 in any category on mobile or desktop.
   When a new block or page type ships, add a page using it to the fixtures and to `LH_URLS`.
   Production is checked nightly by PageSpeed Insights (`psi.yml`).
-- **Budgets are law** (`budgets.json`, `npm run budgets`): eager CSS 8 KB, eager JS 10 KB, and
+- **Budgets are law** (`budgets.json`, `npm run budgets`): critical CSS 8 KB, critical JS 10 KB, and
   per block 3 KB CSS / 4 KB JS (gzip). Raising a number needs a measured reason in
   `docs/budget.md`.
 - **Content is data.** Never emit a CMS string as markup: build HTML with `html`/`attrs` from

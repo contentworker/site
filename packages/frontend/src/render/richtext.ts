@@ -56,7 +56,7 @@ function button(n: RichTextNode, ctx: RichCtx): string | undefined {
   if (!href) return undefined;
   const variant = bold && italic ? 'accent' : bold ? 'primary' : 'secondary';
   const label = escapeHtml(texts.map((t) => t.value).join(''));
-  return `<p class="button-wrapper"><a${attrs({ href, class: `button ${variant}` }).value}>${label}</a></p>`;
+  return `<p class="cta-row"><a${attrs({ href, class: `button ${variant}` }).value}>${label}</a></p>`;
 }
 
 export function renderRichText(doc: RichTextDocument | null | undefined, ctx: RichCtx): Safe {

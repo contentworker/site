@@ -1,57 +1,57 @@
 /*
- * Eager styles: the only render-blocking stylesheet. Tokens, base type, the header, sections and
+ * Critical styles: the only render-blocking stylesheet. Tokens, base type, the header, sections and
  * buttons. Budget: 8 KB gzip (budgets.json). Block styles live with their block; post-LCP globals
- * go in lazy.css.
+ * go in deferred.css.
  */
 :root {
   color-scheme: light dark;
 
   /* colors (contrast ≥ 4.5:1 for text on background) */
-  --background-color: #fff;
-  --light-color: #f4f4f5;
-  --dark-color: #52525b;
-  --text-color: #18181b;
-  --link-color: #2448d8;
-  --link-hover-color: #1a37a8;
-  --on-image-color: #fff;
-  --on-accent-color: #fff;
+  --color-bg: #fff;
+  --color-surface: #f4f4f5;
+  --color-muted: #52525b;
+  --color-text: #18181b;
+  --color-link: #2448d8;
+  --color-link-hover: #1a37a8;
+  --color-on-image: #fff;
+  --color-on-accent: #fff;
 
   /* fonts: each web font has a metric-matched fallback below, so the swap doesn't shift layout */
-  --body-font-family: system-ui, -apple-system, "Segoe UI", roboto, sans-serif;
-  --heading-font-family: var(--body-font-family);
-  --mono-font-family: ui-monospace, "SF Mono", menlo, consolas, monospace;
+  --font-body: system-ui, -apple-system, "Segoe UI", roboto, sans-serif;
+  --font-heading: var(--font-body);
+  --font-mono: ui-monospace, "SF Mono", menlo, consolas, monospace;
 
   /* sizes (mobile first) */
-  --body-font-size-m: 18px;
-  --body-font-size-s: 16px;
-  --body-font-size-xs: 14px;
-  --heading-font-size-xxl: 40px;
-  --heading-font-size-xl: 32px;
-  --heading-font-size-l: 26px;
-  --heading-font-size-m: 22px;
-  --heading-font-size-s: 20px;
-  --heading-font-size-xs: 18px;
+  --text-m: 18px;
+  --text-s: 16px;
+  --text-xs: 14px;
+  --heading-xxl: 40px;
+  --heading-xl: 32px;
+  --heading-l: 26px;
+  --heading-m: 22px;
+  --heading-s: 20px;
+  --heading-xs: 18px;
   --content-width: 1200px;
   --nav-height: 64px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background-color: #0f0f11;
-    --light-color: #1c1c20;
-    --dark-color: #a1a1aa;
-    --text-color: #f4f4f5;
-    --link-color: #8ea6ff;
-    --link-hover-color: #b8c7ff;
-    --on-accent-color: #0f0f11;
+    --color-bg: #0f0f11;
+    --color-surface: #1c1c20;
+    --color-muted: #a1a1aa;
+    --color-text: #f4f4f5;
+    --color-link: #8ea6ff;
+    --color-link-hover: #b8c7ff;
+    --color-on-accent: #0f0f11;
   }
 }
 
 @media (width >= 900px) {
   :root {
-    --heading-font-size-xxl: 56px;
-    --heading-font-size-xl: 40px;
-    --heading-font-size-l: 30px;
+    --heading-xxl: 56px;
+    --heading-xl: 40px;
+    --heading-l: 30px;
   }
 }
 
@@ -63,10 +63,10 @@
 
 body {
   margin: 0;
-  background-color: var(--background-color);
-  color: var(--text-color);
-  font-family: var(--body-font-family);
-  font-size: var(--body-font-size-m);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-m);
   line-height: 1.6;
   text-rendering: optimizespeed;
 }
@@ -83,7 +83,7 @@ h5,
 h6 {
   margin-top: 0.8em;
   margin-bottom: 0.25em;
-  font-family: var(--heading-font-family);
+  font-family: var(--font-heading);
   font-weight: 700;
   line-height: 1.2;
   text-wrap: balance;
@@ -91,22 +91,22 @@ h6 {
 }
 
 h1 {
-  font-size: var(--heading-font-size-xxl);
+  font-size: var(--heading-xxl);
 }
 h2 {
-  font-size: var(--heading-font-size-xl);
+  font-size: var(--heading-xl);
 }
 h3 {
-  font-size: var(--heading-font-size-l);
+  font-size: var(--heading-l);
 }
 h4 {
-  font-size: var(--heading-font-size-m);
+  font-size: var(--heading-m);
 }
 h5 {
-  font-size: var(--heading-font-size-s);
+  font-size: var(--heading-s);
 }
 h6 {
-  font-size: var(--heading-font-size-xs);
+  font-size: var(--heading-xs);
 }
 
 p,
@@ -125,16 +125,16 @@ img {
 }
 
 a:any-link {
-  color: var(--link-color);
+  color: var(--color-link);
   text-underline-offset: 0.15em;
 }
 
 a:hover {
-  color: var(--link-hover-color);
+  color: var(--color-link-hover);
 }
 
 :focus-visible {
-  outline: 3px solid var(--link-color);
+  outline: 3px solid var(--color-link);
   outline-offset: 2px;
 }
 
@@ -144,7 +144,7 @@ a:hover {
   left: 16px;
   z-index: 10;
   padding: 8px 16px;
-  background: var(--background-color);
+  background: var(--color-bg);
 }
 
 .skip-link:focus {
@@ -154,7 +154,7 @@ a:hover {
 /* header (always above the fold, so styled here) */
 header {
   min-height: var(--nav-height);
-  border-bottom: 1px solid var(--light-color);
+  border-bottom: 1px solid var(--color-surface);
 }
 
 .nav {
@@ -275,7 +275,7 @@ header {
     z-index: 1;
     min-width: 200px;
     padding: 8px 16px;
-    background-color: var(--background-color);
+    background-color: var(--color-bg);
   }
 
   .nav-sections li:hover > .nav-sub,
@@ -284,23 +284,23 @@ header {
   }
 }
 
-/* rich text that affects layout (kept out of lazy.css so it can't shift the first viewport) */
+/* rich text that affects layout (kept out of deferred.css so it can't shift the first viewport) */
 code,
 pre {
-  font-family: var(--mono-font-family);
-  font-size: var(--body-font-size-s);
+  font-family: var(--font-mono);
+  font-size: var(--text-s);
 }
 
 pre {
   padding: 16px;
   border-radius: 8px;
-  background-color: var(--light-color);
+  background-color: var(--color-surface);
   overflow-x: auto;
 }
 
 blockquote {
   margin-inline: 0;
-  border-left: 4px solid var(--light-color);
+  border-left: 4px solid var(--color-surface);
   padding-left: 16px;
 }
 
@@ -315,14 +315,14 @@ table {
 
 th,
 td {
-  border-bottom: 1px solid var(--light-color);
+  border-bottom: 1px solid var(--color-surface);
   padding: 8px;
   text-align: left;
 }
 
 figcaption {
-  color: var(--dark-color);
-  font-size: var(--body-font-size-s);
+  color: var(--color-muted);
+  font-size: var(--text-s);
 }
 
 /* sections */
@@ -344,11 +344,11 @@ main > .section.light,
 main > .section.highlight {
   margin: 0;
   padding: 40px 0;
-  background-color: var(--light-color);
+  background-color: var(--color-surface);
 }
 
 /* Full-bleed blocks opt out of the content column. */
-main > .section > .hero-wrapper {
+main > .section > .hero-frame {
   max-width: none;
   padding: 0;
 }
@@ -360,7 +360,7 @@ main > .section > .hero-wrapper {
 }
 
 /* buttons (from the Worker's CTA rule) */
-p.button-wrapper {
+p.cta-row {
   margin: 16px 0;
 }
 
@@ -369,7 +369,7 @@ a.button:any-link {
   align-items: center;
   max-width: 100%;
   min-height: 44px;
-  border: 2px solid var(--text-color);
+  border: 2px solid var(--color-text);
   border-radius: 2em;
   padding: 0.4em 1.2em;
   font-weight: 600;
@@ -378,19 +378,19 @@ a.button:any-link {
 }
 
 a.button.primary {
-  background-color: var(--text-color);
-  color: var(--background-color);
+  background-color: var(--color-text);
+  color: var(--color-bg);
 }
 
 a.button.secondary {
   background-color: transparent;
-  color: var(--text-color);
+  color: var(--color-text);
 }
 
 a.button.accent {
-  border-color: var(--link-color);
-  background-color: var(--link-color);
-  color: var(--on-accent-color);
+  border-color: var(--color-link);
+  background-color: var(--color-link);
+  color: var(--color-on-accent);
 }
 
 a.button:hover {
@@ -411,7 +411,7 @@ a.button:hover {
   padding: 8px 24px;
   background: #fde68a;
   color: #18181b;
-  font-size: var(--body-font-size-xs);
+  font-size: var(--text-xs);
 }
 
 .preview-bar a:any-link {

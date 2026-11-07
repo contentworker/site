@@ -5,13 +5,13 @@
 }
 
 .article-list-items li {
-  border-bottom: 1px solid var(--light-color);
+  border-bottom: 1px solid var(--color-surface);
   padding: 24px 0;
 }
 
 .article-list-items h2 {
   margin: 0;
-  font-size: var(--heading-font-size-m);
+  font-size: var(--heading-m);
 }
 
 .article-list-items h2 a:any-link {
@@ -20,8 +20,8 @@
 
 .article-list-date {
   margin: 4px 0 0;
-  color: var(--dark-color);
-  font-size: var(--body-font-size-s);
+  color: var(--color-muted);
+  font-size: var(--text-s);
 }
 
 .article-list-pages {

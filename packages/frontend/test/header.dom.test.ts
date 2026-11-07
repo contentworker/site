@@ -13,8 +13,8 @@ async function mount({ desktop = false } = {}) {
   window.matchMedia = () =>
     ({ matches: desktop, addEventListener() {} }) as unknown as MediaQueryList;
   Object.assign(globalThis, { window, document: window.document });
-  const { default: decorate } = await import(`../public/blocks/header/header.js?${Math.random()}`);
-  decorate(must(window.document.querySelector<HTMLElement>('.header')));
+  const { default: enhance } = await import(`../public/blocks/header/header.js?${Math.random()}`);
+  enhance(must(window.document.querySelector<HTMLElement>('.header')));
   return window;
 }
 

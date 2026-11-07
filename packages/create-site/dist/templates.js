@@ -77,8 +77,8 @@ export function files(site) {
  * This site's theme: the runtime appends it to its critical CSS, after every runtime rule, so
  * overriding the tokens is enough. Keep it small; it counts toward the 8 KB critical CSS budget.
  *
- *   :root { --link-color: #0b6e4f; --content-width: 1080px; }
- *   @media (prefers-color-scheme: dark) { :root { --link-color: #6fe3b9; } }
+ *   :root { --color-link: #0b6e4f; --content-width: 1080px; }
+ *   @media (prefers-color-scheme: dark) { :root { --color-link: #6fe3b9; } }
  */
 `,
     },

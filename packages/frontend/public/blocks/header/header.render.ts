@@ -10,7 +10,7 @@ import type { Entry, Fields, RenderCtx } from '../../../src/types.ts';
  */
 export const name = 'header';
 export const contentType = null;
-export const css = false; // header styles are in eager.css: the header is always above the fold
+export const css = false; // header styles are in critical.css: the header is always above the fold
 export const js = true;
 
 export default function render(settings: Entry | null, ctx: RenderCtx): Safe {
