@@ -154,15 +154,18 @@ over a service binding with a bare namespace, set it:
 "vars": { "CONTENTWORKER_ADMIN": "https://<your admin host>" }
 ```
 
-It must be an exact https origin (http only on localhost); without one, preview pages can't be
-framed at all. The preview cookie is `SameSite=None; Secure; Partitioned`, so it works inside the
-admin's frame and lives only in the admin's partition there.
+It must be an https origin (http only on localhost). A value that isn't one is logged and
+framing stays off, as it does when no admin can be found or the derived one is the site itself;
+public pages are never affected. The preview cookie is `SameSite=None; Secure; Partitioned`, so it
+works inside the admin's frame and lives only in the admin's partition there. A preview link sets
+it only when opened as a page (top level or in a frame), never as an image or other subresource.
 
 Under `/__preview`, the draft's markup also says what is editable: `data-cw-slot` on the element
 holding a blocks field's blocks, `data-cw-block="<_key>"` on each block, and `data-cw-ref` on the
 page's own fields. Public pages carry none of it. With `cw_session` on the URL (the admin adds
 it), the page loads `scripts/live-preview.js`, which re-renders edited blocks through
-`POST /__preview/render`.
+`POST /__preview/render` in the site's locale (`CONTENTWORKER_LOCALE`), and the preview bar drops
+its exit link: the admin has its own controls, and public pages can't load inside its frame.
 
 ## Develop
 

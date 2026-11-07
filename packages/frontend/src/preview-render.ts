@@ -19,8 +19,14 @@ import type { Entry } from './types.ts';
  * embeds (an image, a linked entry) is resolved from the draft; any other stays a stub, which
  * renders as nothing, as on a page.
  *
- * Answers `{ blocks: [{ key, html }], missing: [keys], css: [hrefs] }` for `keys`, or
- * `{ main, css }` (all of <main>) without. `css` is every block stylesheet the HTML needs.
+ * Answers `{ blocks: [{ key, html }], css: [hrefs] }` for `keys`, or `{ main, css }` (all of
+ * <main>) without them, and also whenever swapping single blocks could leave the page wrong: a key
+ * the fields no longer render (removed, or not there yet), a key on more than one block, or the
+ * first section (it decides the page's h1 and every heading level after it). A block that renders
+ * to nothing answers `html: ""`. `css` is every block stylesheet the HTML needs.
+ *
+ * `locale`, when given, must be the site's own (CONTENTWORKER_LOCALE): the page renders one
+ * locale, and its refs and links say which.
  *
  * Only for the grant in this browser's preview cookie, and only for that entry: the token is
  * checked against the Preview API on every call, as a preview page load does. Same-origin POSTs
@@ -40,13 +46,15 @@ export interface RenderDeps {
   url: URL;
   cw: Backend;
   site: { origin: string; codeBase: string };
+  /** The origin allowed to frame preview responses (preview.ts frameAncestor). */
+  admin: string | null;
 }
 
-const json = (cw: Backend, body: unknown, status = 200): Response =>
+const json = (admin: string | null, body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...textHeaders(previewHeaders(cw.admin)),
+      ...textHeaders(previewHeaders(admin)),
       'content-type': 'application/json; charset=utf-8',
     },
   });
@@ -56,14 +64,15 @@ export async function renderPreviewBlocks({
   url,
   cw,
   site,
+  admin,
 }: RenderDeps): Promise<Response> {
-  const read = await jsonBody(request, url, cw, MAX_RENDER_BYTES);
+  const read = await jsonBody(request, url, admin, MAX_RENDER_BYTES);
   if ('refused' in read) return read.refused;
   const { entryId, fields, locale, keys } = read.body;
   if (typeof entryId !== 'string' || !isRecord(fields))
-    return json(cw, { error: 'Send entryId and fields.' }, 400);
+    return json(admin, { error: 'Send entryId and fields.' }, 400);
   if (locale !== undefined && (typeof locale !== 'string' || !locale || FORBIDDEN.has(locale)))
-    return json(cw, { error: 'locale must be a locale code.' }, 400);
+    return json(admin, { error: 'locale must be a locale code.' }, 400);
   if (
     keys !== undefined &&
     !(
@@ -72,19 +81,21 @@ export async function renderPreviewBlocks({
       keys.every((k) => typeof k === 'string' && k && k.length <= MAX_KEY_LENGTH)
     )
   )
-    return json(cw, { error: `keys must be at most ${MAX_KEYS} block keys.` }, 400);
+    return json(admin, { error: `keys must be at most ${MAX_KEYS} block keys.` }, 400);
+  if (locale !== undefined && locale !== cw.locale)
+    return json(admin, { error: `This site renders ${cw.locale}; send that locale.` }, 422);
 
-  const granted = readCookie(request);
+  const granted = readCookie(request, entryId);
   if (!granted || granted.entryId !== entryId)
-    return json(cw, { error: 'No preview grant for this entry.' }, 403);
+    return json(admin, { error: 'No preview grant for this entry.' }, 403);
   const draft = await fetchDraft(cw, granted.entryId, granted.token);
-  if (!draft) return json(cw, { error: 'This preview has expired.' }, 403);
+  if (!draft) return json(admin, { error: 'This preview has expired.' }, 403);
 
   let entry: Entry;
   try {
     entry = overlay(draft, fields, locale);
   } catch (error) {
-    if (error instanceof TooLarge) return json(cw, { error: error.message }, 413);
+    if (error instanceof TooLarge) return json(admin, { error: error.message }, 413);
     throw error;
   }
   const path = pathFor(draft) ?? '/';
@@ -100,24 +111,25 @@ export async function renderPreviewBlocks({
   } catch (error) {
     // A half-edited field a renderer can't take: the page keeps what it shows.
     console.error(JSON.stringify({ msg: 'preview render failed', error: String(error) }));
-    return json(cw, { error: 'These fields could not be rendered.' }, 422);
+    return json(admin, { error: 'These fields could not be rendered.' }, 422);
   }
 
-  if (!Array.isArray(keys)) {
-    return json(cw, {
+  const whole = () =>
+    json(admin, {
       main: parts.map((p) => p.html).join(''),
       css: [...new Set(parts.flatMap((p) => p.needs))],
     });
-  }
-  const byKey = new Map(parts.filter((p) => p.key).map((p) => [p.key as string, p]));
+  if (!Array.isArray(keys)) return whole();
   const wanted = [...new Set(keys as string[])];
-  const found = wanted.flatMap((key) => {
-    const part = byKey.get(key);
-    return part ? [{ key, part }] : [];
-  });
-  return json(cw, {
+  const found: { key: string; part: MainPart }[] = [];
+  for (const key of wanted) {
+    const matches = parts.filter((p) => p.key === key);
+    const part = matches[0];
+    if (!part || matches.length > 1 || part.index === 0) return whole();
+    found.push({ key, part });
+  }
+  return json(admin, {
     blocks: found.map(({ key, part }) => ({ key, html: part.section })),
-    missing: wanted.filter((k) => !byKey.has(k)),
     css: [...new Set(found.flatMap(({ part }) => part.needs))],
   });
 }
@@ -139,7 +151,7 @@ export function overlay(
   locale?: string | undefined,
 ): Entry {
   const index = new Map<string, unknown>();
-  collect(draft.fields, index, 0);
+  collect(draft.fields, index);
   let nodes = 0;
   const copy = (value: unknown, depth: number): unknown => {
     nodes += 1;
@@ -173,15 +185,28 @@ function isStub(value: Record<string, unknown>): value is { id: string; linkType
   );
 }
 
-/** Every entry and asset the draft embeds, by id. */
-function collect(value: unknown, index: Map<string, unknown>, depth: number): void {
-  if (depth > 12) return;
-  if (Array.isArray(value)) {
-    for (const v of value) collect(v, index, depth + 1);
-    return;
+/**
+ * Every entry and asset the draft embeds, by id, breadth first: when one appears more than once,
+ * the shallowest copy (the one Delivery resolved furthest) wins.
+ */
+function collect(root: unknown, index: Map<string, unknown>): void {
+  let level: unknown[] = [root];
+  for (let depth = 0; depth <= 12 && level.length; depth += 1) {
+    const next: unknown[] = [];
+    for (const value of level) {
+      if (Array.isArray(value)) {
+        next.push(...value);
+        continue;
+      }
+      if (!isRecord(value)) continue;
+      if (
+        typeof value.id === 'string' &&
+        (isRecord(value.fields) || typeof value.url === 'string') &&
+        !index.has(value.id)
+      )
+        index.set(value.id, value);
+      next.push(...Object.values(value));
+    }
+    level = next;
   }
-  if (!isRecord(value)) return;
-  if (typeof value.id === 'string' && (isRecord(value.fields) || typeof value.url === 'string'))
-    index.set(value.id, value);
-  for (const v of Object.values(value)) collect(v, index, depth + 1);
 }

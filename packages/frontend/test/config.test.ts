@@ -104,22 +104,33 @@ test('admin origin: derived from cdn.<domain> or api.<domain>, or set; https onl
     }).admin,
     'http://localhost:5173',
   );
+  // Normalised, and a value that still isn't an origin disables framing rather than throwing.
+  assert.equal(
+    backend({
+      CONTENTWORKER: 'acme/main',
+      CONTENTWORKER_DELIVERY: binding,
+      CONTENTWORKER_ADMIN: 'https://Studio.ACME.example:443',
+      ...k,
+    }).admin,
+    'https://studio.acme.example',
+  );
   for (const bad of [
     '*',
     'https://*.acme.example',
     'http://acme.example',
     'https://acme.example/admin',
+    'https://acme.example?x',
+    'https://u:p@acme.example',
     'acme.example',
   ]) {
-    assert.throws(
-      () =>
-        backend({
-          CONTENTWORKER: 'acme/main',
-          CONTENTWORKER_DELIVERY: binding,
-          CONTENTWORKER_ADMIN: bad,
-          ...k,
-        }),
-      ConfigError,
+    assert.equal(
+      backend({
+        CONTENTWORKER: 'acme/main',
+        CONTENTWORKER_DELIVERY: binding,
+        CONTENTWORKER_ADMIN: bad,
+        ...k,
+      }).admin,
+      null,
       bad,
     );
   }

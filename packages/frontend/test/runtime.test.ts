@@ -260,3 +260,19 @@ test('CSP nonce: each HTML response gets its own nonce on every script, a weak E
     delete g.HTMLRewriter;
   }
 });
+
+test('nonceCsp: a header joining several policies keeps each, every script-src given the nonce', async () => {
+  const { nonceCsp } = await import('../src/nonce.ts');
+  const { CSP } = await import('../src/headers.ts');
+  const out = nonceCsp('n0', `${CSP}, script-src 'self'; img-src 'self', frame-ancestors 'none'`);
+  const policies = out.split(', ');
+  assert.equal(policies.length, 3);
+  assert.equal(policies[0], nonceCsp('n0'));
+  assert.equal(policies[1], "script-src 'nonce-n0' 'strict-dynamic' 'self'; img-src 'self'");
+  assert.equal(policies[2], "frame-ancestors 'none'");
+  // One policy: the page's directives stay, a response's own replace them.
+  assert.equal(
+    nonceCsp('n0', "script-src 'self'; frame-ancestors https://admin.example"),
+    nonceCsp('n0').replace("frame-ancestors 'self'", 'frame-ancestors https://admin.example'),
+  );
+});

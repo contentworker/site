@@ -10,13 +10,16 @@ const sections = inline.fields.sections as Record<string, unknown>[];
 const edited = (heading: string) =>
   sections.map((s) => (s._key === 'k-hero' ? { ...s, heading } : s));
 
+const faqEdited = (heading: string) =>
+  sections.map((s) => (s._key === 'k-faq' ? { ...s, heading } : s));
+
 test('re-renders the requested blocks from unsaved fields, escaped like any page', async () => {
   const { res, body, previewCalls } = await post(
     RENDER,
     {
       entryId: 'p-inline',
-      fields: { sections: edited('Edited <b>"bold"</b>') },
-      keys: ['k-hero', 'k-gone'],
+      fields: { sections: faqEdited('Edited <b>"bold"</b>') },
+      keys: ['k-faq'],
     },
     { cookie: GRANT },
   );
@@ -26,19 +29,59 @@ test('re-renders the requested blocks from unsaved fields, escaped like any page
   assert.equal(res.headers.get('x-robots-tag'), 'noindex');
   assert.equal(res.headers.get('cache-tag'), null);
   const out = JSON.parse(body);
+  assert.equal(out.main, undefined);
   assert.equal(out.blocks.length, 1);
-  assert.equal(out.blocks[0].key, 'k-hero');
+  assert.equal(out.blocks[0].key, 'k-faq');
   const html: string = out.blocks[0].html;
   assert.match(
     html,
-    /^<section class="section hero-container" data-section-status="initialized" data-cw-block="k-hero">/,
+    /^<section class="section faq-container" data-section-status="initialized" data-cw-block="k-faq">/,
   );
   assert.match(html, /Edited &lt;b&gt;&quot;bold&quot;&lt;\/b&gt;/);
   assert.doesNotMatch(html, /<b>/);
-  assert.deepEqual(out.missing, ['k-gone']);
-  assert.deepEqual(out.css, ['/v/abc123/blocks/hero/hero.css']);
+  assert.deepEqual(out.css, ['/v/abc123/blocks/faq/faq.css']);
   // The grant is checked against the Preview API on every call.
   assert.equal(previewCalls.length, 1);
+});
+
+test('answers all of <main> when a block swap could leave the page wrong', async () => {
+  const keysFor = async (keys: string[], fields: Record<string, unknown> = {}) =>
+    JSON.parse((await post(RENDER, { entryId: 'p-inline', fields, keys }, { cookie: GRANT })).body);
+  // The first section decides the h1 and the heading levels after it.
+  assert.match((await keysFor(['k-hero'], { sections: edited('New') })).main, /New/);
+  // A key the fields no longer render (removed, or not on the page yet).
+  assert.ok((await keysFor(['k-gone'])).main);
+  // A key on two blocks: the server can't know which one the page means.
+  const twice = [...sections, { ...sections[1] }];
+  assert.ok((await keysFor(['k-faq'], { sections: twice })).main);
+  // A block that renders to nothing answers empty markup, so the page removes it.
+  const gone = sections.map((s) => (s._key === 'k-faq' ? { ...s, _type: 'nope' } : s));
+  assert.deepEqual((await keysFor(['k-faq'], { sections: gone })).blocks, [
+    { key: 'k-faq', html: '' },
+  ]);
+});
+
+test("the first block's heading changing keeps exactly one h1", async () => {
+  const rt = drafts['p-rt'];
+  assert.ok(rt);
+  const rtSections = rt.fields.sections as Record<string, unknown>[];
+  const withHeading = (heading: string) =>
+    rtSections.map((s) => (s._key === 'k-rt' ? { ...s, heading } : s));
+  const render = async (heading: string) => {
+    const { body } = await post(
+      RENDER,
+      { entryId: 'p-rt', fields: { sections: withHeading(heading) }, keys: ['k-rt'] },
+      { cookie: 'cw_preview=p-rt~pw_good' },
+    );
+    return JSON.parse(body).main as string;
+  };
+  const cleared = await render('');
+  assert.equal((cleared.match(/<h1/g) ?? []).length, 1);
+  assert.match(cleared, /class="section page-head"[\s\S]*<h1[^>]*>Rich \(draft\)<\/h1>/);
+  const added = await render('Fresh heading');
+  assert.equal((added.match(/<h1/g) ?? []).length, 1);
+  assert.doesNotMatch(added, /page-head/);
+  assert.match(added, /<h1[^>]*>Fresh heading<\/h1>/);
 });
 
 test("takes locale-keyed fields (the live preview protocol's), resolving links the draft embeds", async () => {
@@ -53,13 +96,30 @@ test("takes locale-keyed fields (the live preview protocol's), resolving links t
       entryId: 'p-inline',
       locale: 'en-US',
       fields: { sections: { 'en-US': [hero], 'de-DE': [] }, title: { 'de-DE': 'Nur Deutsch' } },
-      keys: ['k-hero'],
     },
     { cookie: GRANT },
   );
-  const html: string = JSON.parse(body).blocks[0].html;
+  const html: string = JSON.parse(body).main;
   assert.match(html, /Localized/);
   assert.match(html, /<img[^>]+a-inline/);
+});
+
+test("a locale other than the site's is refused", async () => {
+  const { res } = await post(
+    RENDER,
+    { entryId: 'p-inline', locale: 'de-DE', fields: { title: { 'de-DE': 'Nur Deutsch' } } },
+    { cookie: GRANT },
+  );
+  assert.equal(res.status, 422);
+});
+
+test('with several grants, the one for the requested entry is used', async () => {
+  const { res } = await post(
+    RENDER,
+    { entryId: 'p-inline', fields: {} },
+    { cookie: 'cw_preview=p-about~pw_good; cw_preview=p-inline~pw_good' },
+  );
+  assert.equal(res.status, 200);
 });
 
 test('without keys, answers all of <main> and every stylesheet it needs', async () => {
@@ -114,4 +174,18 @@ test('supplied fields are copied, prototype names dropped', () => {
     id: 'nope',
     linkType: 'Asset',
   });
+});
+
+test('a link resolves to the shallowest copy the draft embeds', () => {
+  const full = { id: 'e-x', contentType: 'cta', fields: { heading: 'Full', more: 'yes' } };
+  const shallowLater = {
+    ...inline,
+    fields: {
+      // A deeper, less resolved copy comes first in document order.
+      deep: [{ nested: { again: { id: 'e-x', contentType: 'cta', fields: { heading: 'Deep' } } } }],
+      link: full,
+    },
+  };
+  const entry = overlay(shallowLater, { pick: { id: 'e-x', linkType: 'Entry' } });
+  assert.equal(entry.fields.pick, full);
 });

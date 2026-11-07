@@ -9,6 +9,19 @@ export const drafts: Record<string, Entry> = {
     fields: { ...about.fields, title: 'About (draft)', body: doc(p(text('Unpublished words.'))) },
   },
   'p-inline': { ...inlinePage, fields: { ...inlinePage.fields, title: 'Inline (draft)' } },
+  /** A blocks page whose first block is default content: its heading decides the page's h1. */
+  'p-rt': {
+    id: 'p-rt',
+    contentType: 'page',
+    fields: {
+      title: 'Rich (draft)',
+      slug: 'rt',
+      sections: [
+        { _type: 'richText', _key: 'k-rt', heading: 'Rich heading', body: doc(p(text('Body.'))) },
+        { _type: 'cta', _key: 'k-cta', heading: 'Act', body: doc(p(text('Now.'))) },
+      ],
+    },
+  },
 };
 
 export const SITE = 'https://contentworker.site';

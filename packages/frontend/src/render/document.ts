@@ -72,7 +72,11 @@ export async function* renderDocument(input: DocumentInput): AsyncGenerator<stri
       .value;
   }
   yield '</head><body>';
-  if (preview) {
+  if (preview?.live) {
+    // Framed by the admin, which has its own controls: an exit link would load a public page,
+    // and public pages refuse to be framed.
+    yield html`<div class="preview-bar" role="status">Previewing a draft.</div>`.value;
+  } else if (preview) {
     yield html`<div class="preview-bar" role="status">Previewing a draft. <a href="${`/__preview/exit?to=${encodeURIComponent(preview.path)}`}">Exit preview</a></div>`
       .value;
   }
@@ -113,6 +117,8 @@ export function marksFor(preview: PreviewState | undefined): Marks {
 export interface MainPart {
   /** The section's blocks-field `_key`, when it has one. */
   key?: string | undefined;
+  /** The section's index in the entry's sections; undefined for the page's own title. */
+  index?: number | undefined;
   /** Block CSS hrefs this part linked first (its `html` starts with their links). */
   css: string[];
   /** Every block CSS href the part needs, linked earlier or not. */
@@ -164,6 +170,7 @@ export function* mainParts({
     const own = renderSection(section, i, ctx, marks);
     yield {
       key: blockKey(section),
+      index: i,
       css,
       needs,
       section: own.value,

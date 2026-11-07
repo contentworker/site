@@ -19,22 +19,35 @@ export function newNonce(): string {
  * A response's CSP with a nonce: strict-dynamic for CSP3 browsers, 'self' for older ones. Every
  * page directive stays; one the response sets itself replaces the page's (a preview page's
  * frame-ancestors and Trusted Types), and `script-src` always becomes the nonce.
+ *
+ * A header may join several policies with `,` (each is enforced). The first is merged as above;
+ * each later one keeps its own directives, with its `script-src`, if it has one, given the same
+ * nonce, so no policy blocks the scripts this response stamped.
  */
 export function nonceCsp(nonce: string, policy: string = CSP): string {
-  const own = new Map(
+  const script = `script-src 'nonce-${nonce}' 'strict-dynamic' 'self'`;
+  const [first = '', ...others] = policy.split(',');
+  const own = directives(first);
+  const names = new Set([...CSP_DIRECTIVES.map(nameOf), ...own.keys()]);
+  names.delete('script-src');
+  const page = new Map(CSP_DIRECTIVES.map((d) => [nameOf(d), d] as const));
+  const merged = [script, ...[...names].map((n) => own.get(n) ?? page.get(n) ?? n)].join('; ');
+  const rest = others
+    .map((p) => [...directives(p)].map(([n, d]) => (n === 'script-src' ? script : d)).join('; '))
+    .filter(Boolean);
+  return [merged, ...rest].join(', ');
+}
+
+const nameOf = (directive: string): string => directive.split(/\s+/)[0] ?? directive;
+
+function directives(policy: string): Map<string, string> {
+  return new Map(
     policy
       .split(';')
       .map((d) => d.trim())
       .filter(Boolean)
-      .map((d) => [d.split(/\s+/)[0] ?? d, d] as const),
+      .map((d) => [nameOf(d), d] as const),
   );
-  const names = new Set([...CSP_DIRECTIVES.map((d) => d.split(' ')[0] ?? d), ...own.keys()]);
-  names.delete('script-src');
-  const page = new Map(CSP_DIRECTIVES.map((d) => [d.split(' ')[0] ?? d, d] as const));
-  return [
-    `script-src 'nonce-${nonce}' 'strict-dynamic' 'self'`,
-    ...[...names].map((n) => own.get(n) ?? page.get(n) ?? n),
-  ].join('; ');
 }
 
 const weak = (etag: string | null) => (etag && !etag.startsWith('W/') ? `W/${etag}` : etag);

@@ -71,7 +71,7 @@ async function route(request: Request, env: SiteEnv, ctx: ExecutionContext): Pro
           url,
           cw,
           site: { origin: env.SITE_ORIGIN || url.origin, codeBase: `/v/${env.BUILD_ID}` },
-          render: ({ path, preview }) =>
+          render: ({ path, preview, admin }) =>
             renderPage({
               env,
               ctx,
@@ -79,7 +79,7 @@ async function route(request: Request, env: SiteEnv, ctx: ExecutionContext): Pro
               path,
               request,
               preview,
-              admin: cw.admin,
+              admin,
               delivery: createDelivery(cw),
             }),
         });

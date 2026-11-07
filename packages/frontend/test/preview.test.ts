@@ -4,6 +4,15 @@ import { runInNewContext } from 'node:vm';
 import { HANDOFF_SCRIPT } from '../src/preview.ts';
 import { ADMIN, call, post } from './support/preview.ts';
 
+const LEGACY_CLEAR = 'cw_preview=; Path=/__preview; HttpOnly; Secure; SameSite=Lax; Max-Age=0';
+/** A grant: the old unpartitioned cookie cleared first, then the partitioned one set. */
+function assertGrantCookies(res: Response) {
+  const cookies = res.headers.getSetCookie();
+  assert.equal(cookies.length, 2);
+  assert.equal(cookies[0], LEGACY_CLEAR);
+  assert.match(cookies[1] ?? '', COOKIE);
+}
+
 const COOKIE =
   /^cw_preview=p-about~pw_good; Path=\/__preview; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=3600$/;
 
@@ -21,7 +30,7 @@ test('a ?token= link sets a partitioned, framable cookie and redirects to the dr
   const { res } = await call('/__preview?entry=p-about&token=pw_good');
   assert.equal(res.status, 303);
   assert.equal(res.headers.get('location'), '/__preview/about');
-  assert.match(res.headers.get('set-cookie') ?? '', COOKIE);
+  assertGrantCookies(res);
   assertPreviewHeaders(res);
 });
 
@@ -142,7 +151,7 @@ test('POST /__preview trades a token for the cookie and answers where to go', as
   });
   assert.equal(res.status, 200);
   assert.deepEqual(JSON.parse(body), { location: '/__preview/about?cw_session=sess_12345678' });
-  assert.match(res.headers.get('set-cookie') ?? '', COOKIE);
+  assertGrantCookies(res);
   assert.match(res.headers.get('content-type') ?? '', /^application\/json/);
   assertPreviewHeaders(res);
   const bad = await post('/__preview', { entry: 'p-about', token: 'pw_bad' });
@@ -177,7 +186,8 @@ test('the draft renders under /__preview: uncached, noindex, framable by the adm
   assert.equal(res.headers.get('cache-control'), 'private, no-store');
   assert.equal(res.headers.get('cache-tag'), null);
   assertPreviewHeaders(res);
-  assert.match(res.headers.get('content-security-policy') ?? '', /trusted-types loader cw-preview/);
+  // Only a live page (cw_session) may create the cw-preview Trusted Types policy.
+  assert.match(res.headers.get('content-security-policy') ?? '', /trusted-types loader(;|$)/);
   assert.match(body, /<h1[^>]*>About \(draft\)<\/h1><p>Unpublished words.<\/p>/);
   assert.match(body, /<meta name="robots" content="noindex">/);
   assert.doesNotMatch(body, /rel="canonical"/);
@@ -210,7 +220,9 @@ test('other paths under /__preview show published content; exit clears the cooki
   assert.match(body, /Content, at the edge/);
   const exit = await call('/__preview/exit?to=/about');
   assert.equal(exit.res.headers.get('location'), '/about');
-  assert.match(exit.res.headers.get('set-cookie') ?? '', /SameSite=None; Partitioned; Max-Age=0$/);
+  const cleared = exit.res.headers.getSetCookie();
+  assert.equal(cleared[0], LEGACY_CLEAR);
+  assert.match(cleared[1] ?? '', /^cw_preview=; .*SameSite=None; Partitioned; Max-Age=0$/);
   assert.equal((await call('/__preview/exit?to=//evil.example')).res.headers.get('location'), '/');
 });
 
@@ -243,4 +255,71 @@ test('the gateway stamps its nonce on the handoff script and keeps the preview p
   } finally {
     delete g.HTMLRewriter;
   }
+});
+
+test('exit only ever goes to a path on this site', async () => {
+  const to = async (q: string) =>
+    (await call(`/__preview/exit?to=${q}`)).res.headers.get('location');
+  assert.equal(await to(encodeURIComponent('/about?x=1#top')), '/about?x=1#top');
+  assert.equal(await to('/%5Cevil.example'), '/');
+  assert.equal(await to('/%09/evil.example'), '/');
+  assert.equal(await to('https://evil.example/'), '/');
+  assert.equal(await to('javascript:alert(1)'), '/');
+  assert.equal(await to('/.//evil.example'), '/');
+});
+
+test('a ?token= link sets the cookie only for a navigation, never a subresource', async () => {
+  const link = '/__preview?entry=p-about&token=pw_good';
+  for (const dest of ['image', 'script', 'empty', 'style']) {
+    const { res, previewCalls } = await call(link, { headers: { 'sec-fetch-dest': dest } });
+    assert.equal(res.status, 403, dest);
+    assert.deepEqual(res.headers.getSetCookie(), [], dest);
+    assert.equal(previewCalls.length, 0, dest);
+  }
+  for (const dest of ['document', 'iframe']) {
+    const { res } = await call(link, { headers: { 'sec-fetch-dest': dest } });
+    assert.equal(res.status, 303, dest);
+    assertGrantCookies(res);
+  }
+});
+
+test('an admin origin that is the site itself frames nothing', async () => {
+  const self = await call('/__preview?entry=p-about', {
+    env: { CONTENTWORKER: 'https://cdn.contentworker.site/site/main' },
+  });
+  assert.match(self.res.headers.get('content-security-policy') ?? '', /frame-ancestors 'none'/);
+  const named = await call('/__preview?entry=p-about', {
+    env: { CONTENTWORKER_ADMIN: 'https://contentworker.site' },
+  });
+  assert.match(named.res.headers.get('content-security-policy') ?? '', /frame-ancestors 'none'/);
+});
+
+test('a malformed CONTENTWORKER_ADMIN disables framing instead of breaking pages', async () => {
+  const env = { CONTENTWORKER_ADMIN: 'not an origin' };
+  const page = await call('/about', { env });
+  assert.equal(page.res.status, 200);
+  const preview = await call('/__preview?entry=p-about', { env });
+  assert.equal(preview.res.status, 200);
+  assert.match(preview.res.headers.get('content-security-policy') ?? '', /frame-ancestors 'none'/);
+  const normalised = await call('/__preview?entry=p-about', {
+    env: { CONTENTWORKER_ADMIN: 'https://Admin.ACME.example:443/' },
+  });
+  assertPreviewHeaders(normalised.res, 'https://admin.acme.example');
+});
+
+test('with an old unpartitioned grant beside the new one, the draft for the path wins', async () => {
+  const cookie = 'cw_preview=p-inline~pw_good; cw_preview=p-about~pw_good';
+  const { body } = await call('/__preview/about', { cookie });
+  assert.match(body, /About \(draft\)/);
+  const inline = await call('/__preview/inline', { cookie });
+  assert.match(inline.body, /data-cw-block="k-hero"/);
+});
+
+test('a live preview page allows the cw-preview policy and drops the exit link', async () => {
+  const { res, body } = await call('/__preview/inline?cw_session=sess_12345678', {
+    cookie: 'cw_preview=p-inline~pw_good',
+  });
+  assert.match(res.headers.get('content-security-policy') ?? '', /trusted-types loader cw-preview/);
+  assert.match(body, /<div class="preview-bar" role="status">Previewing a draft.<\/div>/);
+  assert.doesNotMatch(body, /__preview\/exit/);
 });

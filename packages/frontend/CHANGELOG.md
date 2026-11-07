@@ -22,6 +22,9 @@ Bump `version` in `package.json`, add its section here, merge, then push the tag
   `POST /__preview/render` re-renders blocks from unsaved fields; `scripts/live-preview.js` (a stub
   until `@contentworker/sdk/live-preview` is published) loads when the URL has `cw_session`.
   Public pages are unchanged.
+- Grants also clear the unpartitioned `SameSite=Lax` cookie earlier releases set; a preview link
+  sets the cookie only for a navigation; `/__preview/exit?to=` goes only to a path on the site.
+- A malformed `CONTENTWORKER_ADMIN` is logged and turns framing off instead of failing renders.
 
 ## 0.3.0
 

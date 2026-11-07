@@ -20,23 +20,24 @@ export const CSP = CSP_DIRECTIVES.join('; ');
 /**
  * The policy /__preview responses carry instead. Public pages may only be framed by the site
  * itself; preview pages only by the ContentWorker admin (live preview), never by the site or
- * anyone else, and by nobody when the admin origin isn't known. Trusted Types also allows
- * `cw-preview`, the policy the live preview script swaps re-rendered blocks in through.
+ * anyone else, and by nobody when the admin origin isn't known. A live preview page (framed with
+ * `cw_session`) also allows the Trusted Types policy `cw-preview`, which its script swaps
+ * re-rendered blocks in through; no other page may create it.
  */
-export function previewCsp(admin: string | null): string {
+export function previewCsp(admin: string | null, live = false): string {
   return CSP_DIRECTIVES.map((d) =>
     d.startsWith('frame-ancestors ')
       ? `frame-ancestors ${admin ?? "'none'"}`
-      : d.startsWith('trusted-types ')
+      : live && d.startsWith('trusted-types ')
         ? `${d} cw-preview`
         : d,
   ).join('; ');
 }
 
 /** Headers every /__preview response adds: its own CSP, no Referer, never indexed. */
-export function previewHeaders(admin: string | null): Record<string, string> {
+export function previewHeaders(admin: string | null, live = false): Record<string, string> {
   return {
-    'content-security-policy': previewCsp(admin),
+    'content-security-policy': previewCsp(admin, live),
     'referrer-policy': 'no-referrer',
     'x-robots-tag': 'noindex',
   };
@@ -62,6 +63,8 @@ export interface HtmlHeaderOptions {
   preconnect?: string[];
   /** The admin origin allowed to frame a preview page (kind 'preview' only). */
   admin?: string | null;
+  /** A live preview page (kind 'preview' with `cw_session`). */
+  live?: boolean;
 }
 
 export function htmlHeaders({
@@ -71,11 +74,12 @@ export function htmlHeaders({
   codeBase,
   preconnect = [],
   admin = null,
+  live = false,
 }: HtmlHeaderOptions): Headers {
   const h = new Headers({ 'content-type': 'text/html; charset=utf-8', ...SECURITY });
   if (kind === 'preview') {
     h.set('cache-control', NO_STORE);
-    for (const [k, v] of Object.entries(previewHeaders(admin))) h.set(k, v);
+    for (const [k, v] of Object.entries(previewHeaders(admin, live))) h.set(k, v);
   } else {
     h.set('cache-control', BROWSER_HTML);
     // Edge-only TTL: Workers Caching reads it, browsers never see it.

@@ -115,6 +115,7 @@ export async function renderPage({
     codeBase,
     preconnect: assetOrigins(origin, entry),
     admin,
+    live: Boolean(preview?.live),
   });
   const status = notFound ? 404 : 200;
 

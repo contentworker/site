@@ -52,18 +52,34 @@ export async function fetchDraft(
   return (await res.json()) as Entry;
 }
 
-export function readCookie(request: Request): { entryId: string; token: string } | null {
+/**
+ * Every preview grant the browser sent. There can be two for a while: the partitioned cookie and
+ * an older unpartitioned (SameSite=Lax) one from before 0.4, which grants also clear.
+ */
+export function readCookies(request: Request): { entryId: string; token: string }[] {
   const raw = request.headers.get('cookie') ?? '';
-  const match = raw.split(/;\s*/).find((c) => c.startsWith(`${COOKIE}=`));
-  if (!match) return null;
-  let value: string;
-  try {
-    value = decodeURIComponent(match.slice(COOKIE.length + 1));
-  } catch {
-    return null;
+  const out: { entryId: string; token: string }[] = [];
+  for (const c of raw.split(/;\s*/)) {
+    if (!c.startsWith(`${COOKIE}=`)) continue;
+    let value: string;
+    try {
+      value = decodeURIComponent(c.slice(COOKIE.length + 1));
+    } catch {
+      continue;
+    }
+    const [entryId, token] = value.split('~');
+    if (entryId && token && out.length < 4) out.push({ entryId, token });
   }
-  const [entryId, token] = value.split('~');
-  return entryId && token ? { entryId, token } : null;
+  return out;
+}
+
+/** The grant for `entryId` when one was sent, else the first grant. */
+export function readCookie(
+  request: Request,
+  entryId?: string,
+): { entryId: string; token: string } | null {
+  const all = readCookies(request);
+  return all.find((g) => g.entryId === entryId) ?? all[0] ?? null;
 }
 
 /**
@@ -75,20 +91,48 @@ export function readCookie(request: Request): { entryId: string; token: string }
 const cookie = (value: string, maxAge: number): string =>
   `${COOKIE}=${value}; Path=${PREFIX}; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=${maxAge}`;
 
+/** Clears the unpartitioned SameSite=Lax cookie releases before 0.4 set. Drop it in a later major. */
+const LEGACY_CLEAR = `${COOKIE}=; Path=${PREFIX}; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+
+/** Set-Cookie headers for a grant (or, with '', for clearing it), legacy cookie cleared first. */
+function setCookies(headers: Headers, value: string, maxAge: number): Headers {
+  headers.append('set-cookie', LEGACY_CLEAR);
+  headers.append('set-cookie', cookie(value, maxAge));
+  return headers;
+}
+
 export interface PreviewDeps {
   request: Request;
   url: URL;
   cw: Backend;
   /** The site's origin and versioned code base, for the re-render endpoint. */
   site: { origin: string; codeBase: string };
-  render: (opts: { path: string; preview: PreviewState }) => Promise<Response>;
+  render: (opts: {
+    path: string;
+    preview: PreviewState;
+    /** The origin allowed to frame the page (frameAncestor), or null for nobody. */
+    admin: string | null;
+  }) => Promise<Response>;
+}
+
+/**
+ * The origin preview responses let frame them: the admin, unless that would be the site itself
+ * (a derived guess that landed on the site's own host), when nobody may.
+ */
+export function frameAncestor(cw: Backend, url: URL, siteOrigin: string): string | null {
+  return cw.admin && cw.admin !== url.origin && cw.admin !== siteOrigin ? cw.admin : null;
 }
 
 /** A plain-text answer with the preview headers (framing, Referer, noindex). */
-function text(cw: Backend, body: string, status: number, extra: Record<string, string> = {}) {
+function text(
+  admin: string | null,
+  body: string,
+  status: number,
+  extra: Record<string, string> = {},
+) {
   return new Response(body, {
     status,
-    headers: textHeaders({ ...previewHeaders(cw.admin), ...extra }),
+    headers: textHeaders({ ...previewHeaders(admin), ...extra }),
   });
 }
 
@@ -144,15 +188,15 @@ export async function readCapped(request: Request, max: number): Promise<string 
 export async function jsonBody(
   request: Request,
   url: URL,
-  cw: Backend,
+  admin: string | null,
   max: number,
 ): Promise<{ body: Record<string, unknown> } | { refused: Response }> {
   if (!fromOwnPages(request, url))
-    return { refused: text(cw, 'Cross-origin request refused.', 403) };
+    return { refused: text(admin, 'Cross-origin request refused.', 403) };
   if (!(request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json'))
-    return { refused: text(cw, 'Send application/json.', 415) };
+    return { refused: text(admin, 'Send application/json.', 415) };
   const raw = await readCapped(request, max);
-  if (raw === null) return { refused: text(cw, 'Request body too large.', 413) };
+  if (raw === null) return { refused: text(admin, 'Request body too large.', 413) };
   try {
     const body: unknown = JSON.parse(raw);
     if (body && typeof body === 'object' && !Array.isArray(body))
@@ -160,12 +204,13 @@ export async function jsonBody(
   } catch {
     // fall through
   }
-  return { refused: text(cw, 'Send a JSON object.', 400) };
+  return { refused: text(admin, 'Send a JSON object.', 400) };
 }
 
 /** Checks a token and answers with the grant cookie, either as a redirect or as JSON. */
 async function grant(
   cw: Backend,
+  admin: string | null,
   entryId: unknown,
   token: unknown,
   session: string | null,
@@ -177,22 +222,26 @@ async function grant(
     !ENTRY_ID.test(entryId) ||
     !TOKEN.test(token)
   )
-    return text(cw, 'Missing entry or token.', 400);
+    return text(admin, 'Missing entry or token.', 400);
   const draft = await fetchDraft(cw, entryId, token);
-  if (!draft) return text(cw, 'This preview link is invalid or has expired.', 403);
+  if (!draft) return text(admin, 'This preview link is invalid or has expired.', 403);
   const location = landing(draft, session);
-  const setCookie = cookie(`${encodeURIComponent(entryId)}~${token}`, MAX_AGE);
+  const value = `${encodeURIComponent(entryId)}~${token}`;
   if (as === 'redirect')
     return new Response(null, {
       status: 303,
-      headers: textHeaders({ ...previewHeaders(cw.admin), location, 'set-cookie': setCookie }),
+      headers: setCookies(
+        new Headers(textHeaders({ ...previewHeaders(admin), location })),
+        value,
+        MAX_AGE,
+      ),
     });
+  const headers = new Headers({
+    ...textHeaders(previewHeaders(admin)),
+    'content-type': 'application/json; charset=utf-8',
+  });
   return new Response(JSON.stringify({ location }), {
-    headers: {
-      ...textHeaders(previewHeaders(cw.admin)),
-      'content-type': 'application/json; charset=utf-8',
-      'set-cookie': setCookie,
-    },
+    headers: setCookies(headers, value, MAX_AGE),
   });
 }
 
@@ -206,75 +255,99 @@ export const HANDOFF_SCRIPT = `(()=>{const q=new URLSearchParams(location.search
 
 const HANDOFF_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="referrer" content="no-referrer"><title>Opening preview</title></head><body><p id="cw-status" role="status">Opening the preview…</p><noscript><p>Preview links that carry the token after # need JavaScript. Use the ?token= form instead.</p></noscript><script>${HANDOFF_SCRIPT}</script></body></html>`;
 
-function handoffPage(cw: Backend): Response {
+function handoffPage(admin: string | null): Response {
   // The gateway's withNonce stamps this response's nonce on the script and into its CSP.
   return new Response(HANDOFF_PAGE, {
     headers: {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'private, no-store',
       'x-content-type-options': 'nosniff',
-      ...previewHeaders(cw.admin),
+      ...previewHeaders(admin),
     },
   });
 }
 
+/**
+ * Whether a GET may set the grant cookie: only a navigation (top level or in a frame). A preview
+ * link loaded as an image, script or fetch could otherwise plant someone else's grant.
+ */
+function isNavigation(request: Request): boolean {
+  const dest = request.headers.get('sec-fetch-dest');
+  return !dest || dest === 'document' || dest === 'iframe';
+}
+
+/** `to` as a path on this site (path, query and fragment), or `/` for anything else. */
+export function samePath(to: string, url: URL): string {
+  let target: URL;
+  try {
+    target = new URL(to, url.origin);
+  } catch {
+    return '/';
+  }
+  if (target.origin !== url.origin || target.pathname.startsWith('//')) return '/';
+  return `${target.pathname}${target.search}${target.hash}`;
+}
+
 export async function handlePreview(deps: PreviewDeps): Promise<Response> {
   const { request, url, cw, render, site } = deps;
+  const admin = frameAncestor(cw, url, site.origin);
   if (!cw.preview)
     return new Response('Preview is not configured (set CONTENTWORKER_PREVIEW).', {
       status: 404,
-      headers: textHeaders(previewHeaders(cw.admin)),
+      headers: textHeaders(previewHeaders(admin)),
     });
 
   if (request.method === 'POST') {
     if (url.pathname === PREFIX) {
-      const read = await jsonBody(request, url, cw, MAX_HANDOFF_BYTES);
+      const read = await jsonBody(request, url, admin, MAX_HANDOFF_BYTES);
       if ('refused' in read) return read.refused;
       const { entry, token, session } = read.body;
-      return grant(cw, entry, token, sessionOf(session), 'json');
+      return grant(cw, admin, entry, token, sessionOf(session), 'json');
     }
-    if (url.pathname === RENDER_PATH) return renderPreviewBlocks({ request, url, cw, site });
-    return text(cw, 'Method not allowed', 405, { allow: 'GET, HEAD' });
+    if (url.pathname === RENDER_PATH) return renderPreviewBlocks({ request, url, cw, site, admin });
+    return text(admin, 'Method not allowed', 405, { allow: 'GET, HEAD' });
   }
 
   if (url.pathname === PREFIX) {
     const entryId = url.searchParams.get('entry');
     const token = url.searchParams.get('token');
     const session = sessionOf(url.searchParams.get(SESSION_PARAM));
-    if (token !== null) return grant(cw, entryId, token, session, 'redirect');
-    if (!entryId || !ENTRY_ID.test(entryId)) return text(cw, 'Missing entry or token.', 400);
-    return handoffPage(cw);
+    if (token !== null) {
+      if (!isNavigation(request)) return text(admin, 'Open preview links as a page.', 403);
+      return grant(cw, admin, entryId, token, session, 'redirect');
+    }
+    if (!entryId || !ENTRY_ID.test(entryId)) return text(admin, 'Missing entry or token.', 400);
+    return handoffPage(admin);
   }
 
   if (url.pathname === `${PREFIX}/exit`) {
-    const to = url.searchParams.get('to') ?? '/';
-    const safe = to.startsWith('/') && !to.startsWith('//') ? to : '/';
+    const location = samePath(url.searchParams.get('to') ?? '/', url);
     return new Response(null, {
       status: 303,
-      headers: textHeaders({
-        ...previewHeaders(cw.admin),
-        location: safe,
-        'set-cookie': cookie('', 0),
-      }),
+      headers: setCookies(new Headers(textHeaders({ ...previewHeaders(admin), location })), '', 0),
     });
   }
 
   const sitePath = url.pathname.slice(PREFIX.length) || '/';
   const { path } = normalize(new URL(sitePath, url.origin));
-  const granted = readCookie(request);
   let entry: Entry | null = null;
-  if (granted) {
+  // At most a couple of grants (a legacy cookie beside the current one): the draft for this path.
+  for (const granted of readCookies(request).slice(0, 2)) {
     const draft = await fetchDraft(cw, granted.entryId, granted.token);
-    if (draft && pathFor(draft) === path) entry = draft;
+    if (draft && pathFor(draft) === path) {
+      entry = draft;
+      break;
+    }
   }
   const session = sessionOf(url.searchParams.get(SESSION_PARAM));
   return render({
     path,
+    admin,
     preview: {
       entry,
       path,
       scope: { space: cw.space, environment: cw.environment, locale: cw.locale },
-      live: entry && session && cw.admin ? { admin: cw.admin } : null,
+      live: entry && session && admin ? { admin } : null,
     },
   });
 }

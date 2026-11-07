@@ -105,8 +105,10 @@ export function backend(env: Partial<SiteEnv>): Backend {
 
 /**
  * The admin origin: CONTENTWORKER_ADMIN, else the domain behind cdn.<domain> (the Delivery URL)
- * or api.<domain> (the Preview API). Only an exact https origin is accepted (http only on
- * localhost, as the live preview SDK requires); never a wildcard.
+ * or api.<domain> (the Preview API), which is how ContentWorker deployments lay out their hosts.
+ * Only an https origin is accepted (http only on localhost, as the live preview SDK requires),
+ * normalised (lowercase host, default port dropped); never a wildcard. A value that still isn't
+ * one is logged and disables framing, rather than failing every public render.
  */
 function adminOrigin(
   explicit: string | undefined,
@@ -114,19 +116,45 @@ function adminOrigin(
   preview: string | null,
 ): string | null {
   if (explicit?.trim()) {
-    const value = explicit.trim().replace(/\/$/, '');
-    const origin = previewOrigin(value);
-    if (!origin || origin !== value || value.includes('*'))
-      throw new ConfigError(
-        `CONTENTWORKER_ADMIN must be an exact https origin like https://admin.example.com (http only on localhost), got "${explicit}".`,
+    const origin = exactOrigin(explicit.trim());
+    if (!origin) {
+      notice(
+        'error',
+        `CONTENTWORKER_ADMIN must be an https origin like https://admin.example.com (http only on localhost), got "${explicit}". Preview pages can't be framed until it is.`,
       );
+    }
     return origin;
   }
-  if (delivery && /^https?:\/\/cdn\./.test(delivery))
-    return previewOrigin(delivery.replace('//cdn.', '//'));
-  if (preview && /^https?:\/\/api\./.test(preview))
-    return previewOrigin(preview.replace('//api.', '//'));
-  return null;
+  const derived =
+    delivery && /^https?:\/\/cdn\./.test(delivery)
+      ? previewOrigin(delivery.replace('//cdn.', '//'))
+      : preview && /^https?:\/\/api\./.test(preview)
+        ? previewOrigin(preview.replace('//api.', '//'))
+        : null;
+  if (derived)
+    notice(
+      'info',
+      `Preview pages may be framed by ${derived} (derived from the ContentWorker hosts); set CONTENTWORKER_ADMIN to name the admin explicitly.`,
+    );
+  return derived;
+}
+
+const noticed = new Set<string>();
+/** Logs a configuration notice once per isolate, not once per request. */
+function notice(level: 'info' | 'error', msg: string): void {
+  if (noticed.has(msg)) return;
+  noticed.add(msg);
+  console[level](JSON.stringify({ msg }));
+}
+
+/** An origin with nothing after it (a trailing slash is fine), normalised; or null. */
+function exactOrigin(value: string): string | null {
+  if (value.includes('*')) return null;
+  const origin = previewOrigin(value);
+  if (!origin) return null;
+  const url = new URL(value);
+  if (url.username || url.password || url.search || url.hash || url.pathname !== '/') return null;
+  return origin;
 }
 
 /** The origin of an https URL (or http on localhost), or null. */
