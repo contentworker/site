@@ -1,9 +1,20 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { formatContentRef, formatFieldPath } from '../src/content-ref.ts';
 import { overlay } from '../src/preview-render.ts';
 import { drafts, GRANT, post } from './support/preview.ts';
 
 const RENDER = '/__preview/render';
+/** A block's ref, as the page marks it. */
+const blockRef = (key: string, entryId = 'p-inline') =>
+  formatContentRef({
+    space: 'site',
+    environment: 'main',
+    entryId,
+    contentType: 'page',
+    field: formatFieldPath({ field: 'sections', steps: [{ key }] }),
+    locale: 'en-US',
+  });
 const inline = drafts['p-inline'];
 assert.ok(inline);
 const sections = inline.fields.sections as Record<string, unknown>[];
@@ -19,7 +30,7 @@ test('re-renders the requested blocks from unsaved fields, escaped like any page
     {
       entryId: 'p-inline',
       fields: { sections: faqEdited('Edited <b>"bold"</b>') },
-      keys: ['k-faq'],
+      refs: [blockRef('k-faq')],
     },
     { cookie: GRANT },
   );
@@ -32,10 +43,13 @@ test('re-renders the requested blocks from unsaved fields, escaped like any page
   assert.equal(out.main, undefined);
   assert.equal(out.blocks.length, 1);
   assert.equal(out.blocks[0].key, 'k-faq');
+  assert.equal(out.blocks[0].ref, blockRef('k-faq'));
   const html: string = out.blocks[0].html;
   assert.match(
     html,
-    /^<section class="section faq-container" data-section-status="initialized" data-cw-block="k-faq">/,
+    new RegExp(
+      `^<section class="section faq-container" data-section-status="initialized" data-cw-ref="${blockRef('k-faq').replace(/[|[\]%]/g, '\\$&')}">`,
+    ),
   );
   assert.match(html, /Edited &lt;b&gt;&quot;bold&quot;&lt;\/b&gt;/);
   assert.doesNotMatch(html, /<b>/);
@@ -46,7 +60,15 @@ test('re-renders the requested blocks from unsaved fields, escaped like any page
 
 test('answers all of <main> when a block swap could leave the page wrong', async () => {
   const keysFor = async (keys: string[], fields: Record<string, unknown> = {}) =>
-    JSON.parse((await post(RENDER, { entryId: 'p-inline', fields, keys }, { cookie: GRANT })).body);
+    JSON.parse(
+      (
+        await post(
+          RENDER,
+          { entryId: 'p-inline', fields, refs: keys.map((k) => blockRef(k)) },
+          { cookie: GRANT },
+        )
+      ).body,
+    );
   // The first section decides the h1 and the heading levels after it.
   assert.match((await keysFor(['k-hero'], { sections: edited('New') })).main, /New/);
   // A key the fields no longer render (removed, or not on the page yet).
@@ -57,7 +79,7 @@ test('answers all of <main> when a block swap could leave the page wrong', async
   // A block that renders to nothing answers empty markup, so the page removes it.
   const gone = sections.map((s) => (s._key === 'k-faq' ? { ...s, _type: 'nope' } : s));
   assert.deepEqual((await keysFor(['k-faq'], { sections: gone })).blocks, [
-    { key: 'k-faq', html: '' },
+    { ref: blockRef('k-faq'), key: 'k-faq', html: '' },
   ]);
 });
 
@@ -70,7 +92,11 @@ test("the first block's heading changing keeps exactly one h1", async () => {
   const render = async (heading: string) => {
     const { body } = await post(
       RENDER,
-      { entryId: 'p-rt', fields: { sections: withHeading(heading) }, keys: ['k-rt'] },
+      {
+        entryId: 'p-rt',
+        fields: { sections: withHeading(heading) },
+        refs: [blockRef('k-rt', 'p-rt')],
+      },
       { cookie: 'cw_preview=p-rt~pw_good' },
     );
     return JSON.parse(body).main as string;
@@ -84,7 +110,7 @@ test("the first block's heading changing keeps exactly one h1", async () => {
   assert.match(added, /<h1[^>]*>Fresh heading<\/h1>/);
 });
 
-test("takes locale-keyed fields (the live preview protocol's), resolving links the draft embeds", async () => {
+test("takes one locale's values (onState's), resolving links the draft embeds", async () => {
   const hero = {
     ...sections[0],
     heading: 'Localized',
@@ -95,7 +121,7 @@ test("takes locale-keyed fields (the live preview protocol's), resolving links t
     {
       entryId: 'p-inline',
       locale: 'en-US',
-      fields: { sections: { 'en-US': [hero], 'de-DE': [] }, title: { 'de-DE': 'Nur Deutsch' } },
+      fields: { sections: [hero] },
     },
     { cookie: GRANT },
   );
@@ -107,7 +133,7 @@ test("takes locale-keyed fields (the live preview protocol's), resolving links t
 test("a locale other than the site's is refused", async () => {
   const { res } = await post(
     RENDER,
-    { entryId: 'p-inline', locale: 'de-DE', fields: { title: { 'de-DE': 'Nur Deutsch' } } },
+    { entryId: 'p-inline', locale: 'de-DE', fields: { title: 'Nur Deutsch' } },
     { cookie: GRANT },
   );
   assert.equal(res.status, 422);
@@ -122,11 +148,11 @@ test('with several grants, the one for the requested entry is used', async () =>
   assert.equal(res.status, 200);
 });
 
-test('without keys, answers all of <main> and every stylesheet it needs', async () => {
+test('without refs, answers all of <main> and every stylesheet it needs', async () => {
   const { body } = await post(RENDER, { entryId: 'p-inline', fields: {} }, { cookie: GRANT });
   const out = JSON.parse(body);
-  assert.match(out.main, /data-cw-block="k-hero"/);
-  assert.match(out.main, /data-cw-block="k-faq"/);
+  assert.ok(out.main.includes(`data-cw-ref="${blockRef('k-hero')}"`));
+  assert.ok(out.main.includes(`data-cw-ref="${blockRef('k-faq')}"`));
   assert.deepEqual(out.css, ['/v/abc123/blocks/hero/hero.css', '/v/abc123/blocks/faq/faq.css']);
 });
 
@@ -154,9 +180,47 @@ test('same-origin JSON only, bounded in size and shape', async () => {
   assert.equal(await status(ok, { 'content-type': 'text/plain' }), 415);
   assert.equal(await status({ ...ok, pad: 'x'.repeat(2 * 1024 * 1024) }), 413);
   assert.equal(await status({ entryId: 'p-inline' }), 400);
-  assert.equal(await status({ ...ok, keys: 'k-hero' }), 400);
-  assert.equal(await status({ ...ok, keys: Array(501).fill('k') }), 400);
-  assert.equal(await status({ ...ok, locale: '__proto__' }), 400);
+  assert.equal(await status({ ...ok, refs: blockRef('k-hero') }), 400);
+  assert.equal(await status({ ...ok, refs: Array(501).fill(blockRef('k-faq')) }), 400);
+  assert.equal(await status({ ...ok, locale: '__proto__' }), 422);
+  // A ref must name one of this entry's blocks: not a field, another entry or another locale.
+  for (const bad of [
+    'k-faq',
+    blockRef('k-faq', 'p-about'),
+    formatContentRef({
+      space: 'site',
+      environment: 'main',
+      entryId: 'p-inline',
+      contentType: 'page',
+      field: 'title',
+      locale: 'en-US',
+    }),
+    formatContentRef({
+      space: 'site',
+      environment: 'main',
+      entryId: 'p-inline',
+      contentType: 'page',
+      field: 'sections[k-faq].heading',
+      locale: 'en-US',
+    }),
+    formatContentRef({
+      space: 'site',
+      environment: 'main',
+      entryId: 'p-inline',
+      contentType: 'page',
+      field: 'sections[k-faq]',
+      locale: 'de-DE',
+    }),
+    formatContentRef({
+      space: 'other',
+      environment: 'main',
+      entryId: 'p-inline',
+      contentType: 'page',
+      field: 'sections[k-faq]',
+      locale: 'en-US',
+    }),
+  ])
+    assert.equal(await status({ ...ok, refs: [bad] }), 400, bad);
   let deep: unknown = 'x';
   for (let i = 0; i < 80; i += 1) deep = [deep];
   assert.equal(await status({ ...ok, fields: { title: deep } }), 413);

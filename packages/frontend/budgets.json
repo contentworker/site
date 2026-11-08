@@ -17,9 +17,14 @@
       "max": 8192
     },
     {
-      "name": "preview JS (only /__preview, live)",
+      "name": "preview JS (only /__preview drafts)",
       "files": ["scripts/live-preview.js"],
       "max": 4096
+    },
+    {
+      "name": "preview CSS (only /__preview drafts)",
+      "files": ["styles/preview.css"],
+      "max": 1024
     },
     {
       "name": "delayed JS",

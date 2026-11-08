@@ -1,41 +1,38 @@
 /**
- * Live preview, the page side. Loaded only under /__preview, for the draft, when the admin frames
- * the page with `cw_session` on its URL (src/render/document.ts); public pages never load it.
+ * Live preview, the page side. Loaded only on /__preview pages showing a draft; connects only
+ * when the admin frames the page. `onState` re-renders through POST /__preview/render and swaps
+ * blocks by their `data-cw-ref`; `view.ghosts` get `data-cw-ghost` (styles/preview.css).
  *
- * The admin holds the unsaved fields and sends edits by postMessage; `startLivePreview` from
- * `@contentworker/sdk/live-preview` applies them and calls `onChange`, which asks the Worker to
- * re-render with the edited fields (POST /__preview/render) and swaps the result in by
- * `data-cw-block`. The Worker renders with the same block renderers and escaping as any page.
- *
- * STUB: the SDK isn't published yet, so `startLivePreview` below is null and nothing starts. Once
- * it is, serve its browser build next to this file (no bundler: the served file is the source)
- * and replace the stub with:
- *
- *   import { startLivePreview } from './vendor/live-preview.js';
+ * STUB: `connectPreview` is null until @contentworker/sdk/live-preview is published. Then serve
+ * its browser build beside this file and use `import { connectPreview } from './vendor/live-preview.js'`.
  */
 import { loadSection, loadSections } from './lib.js';
 
 /**
- * @typedef {Record<string, Record<string, unknown>>} LiveFields
- * @typedef {{ op: string, key?: string, field: string }} LivePatchOp
- * @typedef {{ entryId: string, contentType: string, locale: string, version: number,
- *   seq: number, ops: readonly LivePatchOp[] }} LivePreviewUpdate
- * @typedef {{ adminOrigin: string,
- *   onChange: (fields: LiveFields, update: LivePreviewUpdate) => void | Promise<void> }} LivePreviewOptions
- * @typedef {{ readonly active: boolean, refresh(): void, destroy(): void }} LivePreview
+ * The shapes of `@contentworker/sdk/live-preview` that this file uses.
+ * @typedef {'select' | 'patch.fields' | 'patch.blocks' | 'proposals' | 'scroll' | 'layout'} Capability
+ * @typedef {Record<string, unknown>} LiveFields
+ * @typedef {{ readonly rev: number, readonly withProposals: LiveFields, readonly ghosts: {
+ *   readonly inserted: readonly string[], readonly changed: readonly string[],
+ *   readonly removed: readonly string[] } }} LiveView
+ * @typedef {{ readonly adminOrigin?: string, readonly capabilities: readonly Capability[],
+ *   readonly onState: (entryId: string, locale: string, fields: LiveFields, view: LiveView) =>
+ *   void | Promise<void> }} ConnectPreviewOptions
+ * @typedef {{ readonly active: boolean, readonly connected: boolean,
+ *   on(kind: 'connect', handler: () => void): () => void,
+ *   emit(kind: 'page', body: { url: string, entries: { entryId: string, contentType: string,
+ *   locale: string }[] }): void, refresh(): void, close(): void }} PreviewConnection
  */
 
-/** STUB until the SDK is published (see above). @type {((options: LivePreviewOptions) => LivePreview) | null} */
-const startLivePreview = null;
+/** STUB until the SDK is published (see above). @type {((options: ConnectPreviewOptions) => PreviewConnection) | null} */
+const connectPreview = null;
 
-/** The next markup `createHTML` may pass: only what render() took from a render response. */
+/** @type {Capability[]} */
+const CAPABILITIES = ['select', 'patch.fields', 'patch.blocks', 'proposals', 'scroll', 'layout'];
+
+/** The one string `cw-preview` will pass next: a render response's markup, once. */
 let allowed = '';
 
-/**
- * The Trusted Types policy only live preview pages allow besides the loader's (src/headers.ts).
- * It passes exactly the string `fragment` is about to parse, once, and refuses anything else, so
- * no other script on the page can use it as a way around Trusted Types.
- */
 const htmlPolicy = /** @type {Window & { trustedTypes?: { createPolicy(name: string,
  *   rules: { createHTML(html: string): string }): { createHTML(html: string): string } } }} */ (
   window
@@ -47,10 +44,7 @@ const htmlPolicy = /** @type {Window & { trustedTypes?: { createPolicy(name: str
   },
 });
 
-/**
- * Parses markup from this origin's render endpoint (escaped there like every page).
- * @param {string} html
- */
+/** @param {string} html markup from this origin's render endpoint */
 function fragment(html) {
   const template = document.createElement('template');
   allowed = html;
@@ -59,14 +53,12 @@ function fragment(html) {
   return template.content;
 }
 
-/**
- * Links a stylesheet in <head> once (not inside <main>, which a re-render may replace), and
- * resolves when it has loaded or failed.
- * @param {string} href
- */
+/** @param {string} href */
+const linkSelector = (href) => `link[rel="stylesheet"][href="${CSS.escape(href)}"]`;
+
+/** Links a stylesheet in <head> once (never in <main>, which a re-render replaces). @param {string} href */
 function headStylesheet(href) {
-  const selector = `link[rel="stylesheet"][href="${CSS.escape(href)}"]`;
-  if (document.head.querySelector(selector)) return Promise.resolve();
+  if (document.head.querySelector(linkSelector(href))) return Promise.resolve();
   return /** @type {Promise<void>} */ (
     new Promise((resolve) => {
       const link = document.createElement('link');
@@ -79,32 +71,79 @@ function headStylesheet(href) {
   );
 }
 
-/**
- * Drops stylesheet links <head> already has, so a swapped <main> doesn't repeat them.
- * @param {DocumentFragment} frag
- */
+/** Drops stylesheet links <head> already has. @param {DocumentFragment} frag */
 function dropLinked(frag) {
   for (const link of frag.querySelectorAll('link[rel="stylesheet"]')) {
     const href = link.getAttribute('href');
-    if (href && document.head.querySelector(`link[rel="stylesheet"][href="${CSS.escape(href)}"]`))
-      link.remove();
+    if (href && document.head.querySelector(linkSelector(href))) link.remove();
   }
   return frag;
 }
 
-/**
- * Block keys a patch touched, or null when it moved, added or removed blocks, or changed another
- * field: then the whole of <main> is re-rendered.
- * @param {readonly LivePatchOp[]} ops
- */
-function touchedKeys(ops) {
-  if (!ops.length) return null;
-  const keys = new Set();
-  for (const op of ops) {
-    if (op.op !== 'update' || !op.key || op.field !== 'sections') return null;
-    keys.add(op.key);
+/** The `_key` a `sections[<key>]` ref names, escapes undone, else undefined. @param {string | null} ref */
+export function blockKeyOfRef(ref) {
+  const parts = (ref ?? '').split('|');
+  if (parts.length !== 6) return undefined;
+  let field;
+  try {
+    field = decodeURIComponent(parts[4] ?? '');
+  } catch {
+    return undefined;
   }
-  return [...keys];
+  const m = /^sections\[([^[\]]+)\]$/.exec(field);
+  return m?.[1]?.replace(/%5B/gi, '[').replace(/%5D/gi, ']').replace(/%25/g, '%');
+}
+
+/** Block elements by key (every element, so a caller can refuse to guess). @param {ParentNode} root */
+function blocksOn(root) {
+  /** @type {Map<string, { el: Element, ref: string }[]>} */
+  const out = new Map();
+  for (const el of root.querySelectorAll('[data-cw-ref]')) {
+    const ref = el.getAttribute('data-cw-ref') ?? '';
+    const key = blockKeyOfRef(ref);
+    if (key) out.set(key, [...(out.get(key) ?? []), { el, ref }]);
+  }
+  return out;
+}
+
+/** @param {unknown} a @param {unknown} b */
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * Refs of the blocks to re-render, or null for all of <main> (another field, or the blocks or
+ * their order changed). @param {LiveFields | undefined} before @param {LiveFields} after
+ */
+function changedBlocks(before, after) {
+  if (!before) return null;
+  const { sections: was, ...restWas } = before;
+  const { sections: now, ...restNow } = after;
+  if (!same(restWas, restNow) || !Array.isArray(was) || !Array.isArray(now)) return null;
+  /** @param {unknown} b */
+  const keyOf = (b) => /** @type {{ _key?: unknown }} */ (b)?._key;
+  if (!same(was.map(keyOf), now.map(keyOf))) return null;
+  const keys = now.filter((b, i) => !same(b, was[i])).map(keyOf);
+  if (keys.some((k) => typeof k !== 'string')) return null;
+  const onPage = blocksOn(document);
+  /** @type {string[]} */
+  const refs = [];
+  for (const key of /** @type {string[]} */ (keys)) {
+    const found = onPage.get(key);
+    if (found?.length !== 1 || !found[0]) return null;
+    refs.push(found[0].ref);
+  }
+  return refs;
+}
+
+/** @param {LiveView['ghosts']} ghosts */
+function markGhosts(ghosts) {
+  for (const el of document.querySelectorAll('[data-cw-ghost]'))
+    el.removeAttribute('data-cw-ghost');
+  const onPage = blocksOn(document);
+  for (const kind of /** @type {const} */ (['inserted', 'changed', 'removed'])) {
+    for (const key of ghosts[kind]) {
+      for (const { el } of onPage.get(key) ?? []) el.setAttribute('data-cw-ghost', kind);
+    }
+  }
 }
 
 let latest = 0;
@@ -112,22 +151,25 @@ let latest = 0;
 let newest = Promise.resolve();
 /** @type {AbortController | undefined} */
 let inflight;
+/** The fields last put on screen. @type {LiveFields | undefined} */
+let shown;
 
 /**
- * Re-renders the edited fields through the Worker and puts the result on the page. A newer call
- * aborts an older one, an older response is never drawn over a newer one, and a superseded call
- * settles only when the newest has, so the edit is reported on screen only once it is.
- * @param {LiveFields} fields
- * @param {LivePreviewUpdate} update
+ * `onState`. A newer call aborts an older one, which is never drawn and settles only after the
+ * newest, so `applied` means on screen.
+ * @param {string} entryId
+ * @param {string} locale
+ * @param {LiveFields} _fields
+ * @param {LiveView} view
  * @returns {Promise<void>}
  */
-export function render(fields, update) {
+export function onState(entryId, locale, _fields, view) {
   const seq = ++latest;
   inflight?.abort();
   const controller = new AbortController();
   inflight = controller;
   const stale = () => seq !== latest;
-  const run = draw(fields, update, controller.signal, stale).then(
+  const run = draw(entryId, locale, view, controller.signal, stale).then(
     () => (stale() ? newest : undefined),
     (error) => {
       if (stale()) return newest;
@@ -139,14 +181,22 @@ export function render(fields, update) {
 }
 
 /**
- * @param {LiveFields} fields
- * @param {LivePreviewUpdate} update
+ * @param {string} entryId
+ * @param {string} locale
+ * @param {LiveView} view
  * @param {AbortSignal} signal
  * @param {() => boolean} stale
+ * @param {boolean} [whole]
  * @returns {Promise<void>}
  */
-async function draw(fields, update, signal, stale) {
-  const keys = touchedKeys(update.ops);
+async function draw(entryId, locale, view, signal, stale, whole = false) {
+  const fields = view.withProposals;
+  const refs = whole ? null : changedBlocks(shown, fields);
+  if (refs && refs.length === 0) {
+    markGhosts(view.ghosts);
+    shown = fields;
+    return;
+  }
   const res = await fetch('/__preview/render', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -154,13 +204,7 @@ async function draw(fields, update, signal, stale) {
     // Preview pages send no Referer, which would blank Origin; the Worker checks Origin.
     referrerPolicy: 'same-origin',
     signal,
-    body: JSON.stringify({
-      entryId: update.entryId,
-      locale: update.locale,
-      session: new URL(window.location.href).searchParams.get('cw_session'),
-      fields,
-      ...(keys ? { keys } : {}),
-    }),
+    body: JSON.stringify({ entryId, locale, fields, ...(refs ? { refs } : {}) }),
   });
   if (!res.ok) throw new Error(`render failed (${res.status})`);
   /** @type {{ css: string[], main?: string, blocks?: { key: string, html: string }[] }} */
@@ -171,33 +215,50 @@ async function draw(fields, update, signal, stale) {
   if (out.main !== undefined) {
     main.replaceChildren(dropLinked(fragment(out.main)));
     await loadSections(main);
-    return;
-  }
-  const blocks = out.blocks ?? [];
-  // The server swaps the first block with a key; a page showing a key twice gets <main> whole.
-  const targets = blocks.map(({ key }) =>
-    main.querySelectorAll(`[data-cw-block="${CSS.escape(key)}"]`),
-  );
-  if (targets.some((found) => found.length !== 1))
-    return draw(fields, { ...update, ops: [] }, signal, stale);
-  for (const [i, { html }] of blocks.entries()) {
-    const el = targets[i]?.[0];
-    if (!el) continue;
-    // A block that now renders to nothing leaves the page.
-    const next = html ? dropLinked(fragment(html)).firstElementChild : null;
-    if (!(next instanceof HTMLElement)) {
-      el.remove();
-      continue;
+  } else {
+    const onPage = blocksOn(main);
+    for (const { key, html } of out.blocks ?? []) {
+      const found = onPage.get(key);
+      if (found?.length !== 1 || !found[0]) return draw(entryId, locale, view, signal, stale, true);
+      // A block that now renders to nothing leaves the page.
+      const next = html ? dropLinked(fragment(html)).firstElementChild : null;
+      if (!(next instanceof HTMLElement)) {
+        found[0].el.remove();
+        continue;
+      }
+      found[0].el.replaceWith(next);
+      await loadSection(next);
     }
-    el.replaceWith(next);
-    await loadSection(next);
   }
+  markGhosts(view.ghosts);
+  shown = fields;
 }
 
 const adminOrigin = document.querySelector('meta[name="cw-admin-origin"]')?.getAttribute('content');
-if (adminOrigin && startLivePreview) {
-  /** @type {(options: LivePreviewOptions) => LivePreview} */ (startLivePreview)({
+const entryMeta = document.querySelector('meta[name="cw-entry"]');
+const entry = {
+  entryId: entryMeta?.getAttribute('content') ?? '',
+  contentType: entryMeta?.getAttribute('data-content-type') ?? '',
+  locale: entryMeta?.getAttribute('data-locale') ?? '',
+};
+if (adminOrigin && entry.entryId && connectPreview) {
+  const preview = /** @type {(options: ConnectPreviewOptions) => PreviewConnection} */ (
+    connectPreview
+  )({
     adminOrigin,
-    onChange: render,
+    capabilities: CAPABILITIES,
+    onState(entryId, locale, fields, view) {
+      if (entryId !== entry.entryId) return;
+      return onState(entryId, locale, fields, view);
+    },
   });
+  if (preview.active) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = new URL('../styles/preview.css', import.meta.url).pathname;
+    document.head.append(link);
+    preview.on('connect', () =>
+      preview.emit('page', { url: window.location.href, entries: [entry] }),
+    );
+  }
 }

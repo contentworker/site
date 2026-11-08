@@ -101,6 +101,12 @@ export interface RenderCtx {
   image: (asset: Asset | null | undefined, opts?: ImageOptions) => Safe;
   richText: (doc: RichTextDocument | null | undefined) => Safe;
   renderBlock: (entry: Entry, opts?: { inline?: boolean }) => Safe;
+  /**
+   * The `data-cw-ref` attribute for one of the current block's fields (`<h2${ctx.ref('heading')}>`),
+   * so the admin can map a click on it back to the field. Empty everywhere but a draft under
+   * /__preview, so public renders never change.
+   */
+  ref: (field: string) => Safe;
 }
 
 /** What Markdown rendering receives. */
@@ -182,7 +188,7 @@ export function asSection(value: unknown): Entry | null {
 
 /**
  * Blocks-field elements by their `_key`, kept beside the section rather than on it so nothing a
- * public render hashes or prints changes. Only preview renders read it (`data-cw-block`).
+ * public render hashes or prints changes. Only preview renders read it (`data-cw-ref`).
  */
 const KEYS = new WeakMap<Entry, string>();
 
@@ -210,15 +216,15 @@ export interface PreviewState {
   entry: Entry | null;
   path: string;
   /**
-   * The draft's space, environment and locale, for the editing marks (`data-cw-block`,
-   * `data-cw-slot`, `data-cw-ref`). Absent, a preview renders without them.
+   * The draft's space, environment and locale, for the editing marks (`data-cw-ref`,
+   * `data-cw-slot`). Absent, a preview renders without them.
    */
   scope?: { space: string; environment: string; locale: string } | undefined;
-  /** Set when the admin frames the page for a live preview session: the origin it listens to. */
-  live?: { admin: string } | null | undefined;
   /**
-   * The live preview session (`cw_session`) the admin framed the page with, draft shown or not:
-   * links to the site's pages carry it and stay under /__preview (src/preview-links.ts).
+   * Set when the page shows the draft and the admin origin is known: the page loads the live
+   * preview script, which connects only when the admin frames it.
    */
-  session?: string | null | undefined;
+  live?: { admin: string } | null | undefined;
+  /** The page was loaded in a frame (Sec-Fetch-Dest: iframe), presumably the admin's. */
+  framed?: boolean | undefined;
 }

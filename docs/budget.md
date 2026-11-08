@@ -9,7 +9,8 @@ budgets keep it there as a site adds blocks. `budgets.json` is enforced by `npm 
 | Eager JS (`lib.js`, `site.js`, `shared.js`) | 10 KB                                  | Modules never block, but they compete with the LCP image.                              |
 | Lazy CSS (`lazy.css`, `fonts.css`)          | 8 KB                                   | Loaded after the first section.                                                        |
 | Delayed JS                                  | 20 KB                                  | Runs 3 s after `load`; still counts toward TBT on slow phones.                         |
-| Preview JS (`live-preview.js`)              | 4 KB                                   | Loads only under `/__preview` with `cw_session`, never on a public page.               |
+| Preview JS (`live-preview.js`)              | 4 KB                                   | Loads only on `/__preview` pages showing a draft, never on a public page.              |
+| Preview CSS (`preview.css`)                 | 1 KB                                   | Linked only by the live preview script, once the admin frames the page.                |
 | Each block                                  | 3 KB CSS, 4 KB JS                      | Blocks add up; a block over this needs a recorded reason.                              |
 | HTML document                               | first 14 KB holds head + first section | One round trip to first paint.                                                         |
 | Requests before LCP                         | ≤ 5                                    | Document, eager.css, site.js (+ lib.js preloaded), LCP image, first-section block CSS. |

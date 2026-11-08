@@ -160,15 +160,20 @@ public pages are never affected. The preview cookie is `SameSite=None; Secure; P
 works inside the admin's frame and lives only in the admin's partition there. A preview link sets
 it only when opened as a page (top level or in a frame), never as an image or other subresource.
 
-Under `/__preview`, the draft's markup also says what is editable: `data-cw-slot` on the element
-holding a blocks field's blocks, `data-cw-block="<_key>"` on each block, and `data-cw-ref` on the
-page's own fields. Public pages carry none of it. With `cw_session` on the URL (the admin adds
-it), the page loads `scripts/live-preview.js`, which re-renders edited blocks through
-`POST /__preview/render` in the site's locale (`CONTENTWORKER_LOCALE`). Inside a session, links
-to the site's own pages become `/__preview/<path>?cw_session=…`, so browsing in the admin's frame
-shows drafts where they exist and published content elsewhere; external, `mailto:`, `tel:` and
-fragment links are left alone. The preview bar drops its exit link there: the admin has its own
-controls, and public pages can't load inside its frame.
+Under `/__preview`, the draft's markup says what is editable, in the content-ref format of
+`@contentworker/sdk`: `data-cw-ref` on the page's own fields (`title`, `body`), on each block
+(`sections[<key>]`) and on fields inside it (`sections[<key>].heading`), and `data-cw-slot` (the
+`sections` ref) on the element holding the blocks. Public pages carry none of it. A page showing
+the draft also loads `scripts/live-preview.js`, which connects only when the admin frames it,
+re-renders edited blocks through `POST /__preview/render` in the site's locale
+(`CONTENTWORKER_LOCALE`), and shows Coworker's proposed blocks as ghosts (`styles/preview.css`).
+
+On every `/__preview` page, links to the site's own pages point to `/__preview/<path>`, so browsing
+in the admin's frame shows drafts where they exist and published content elsewhere; external,
+`mailto:`, `tel:` and fragment links are left alone. Loaded in a frame, the preview bar drops its
+exit link: the admin has its own controls, and public pages can't load inside its frame. Your
+own block renderers can mark their fields too: `<h2${ctx.ref('heading')}>` adds the field's ref
+under preview and nothing on public pages.
 
 ## Develop
 

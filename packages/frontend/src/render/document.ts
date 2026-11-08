@@ -1,5 +1,5 @@
 import { toClassName } from '../../public/scripts/shared.js';
-import { type ContentRef, formatContentRef } from '../content-ref.ts';
+import { type ContentRef, formatContentRef, formatFieldPath } from '../content-ref.ts';
 import { attrs, html, type Safe } from '../html.ts';
 import { stayInPreview } from '../preview-links.ts';
 import {
@@ -46,14 +46,13 @@ export interface DocumentInput {
 }
 
 export async function* renderDocument(input: DocumentInput): AsyncGenerator<string> {
-  const session = input.preview?.session;
-  if (!session) {
+  if (!input.preview) {
     yield* renderPage(input);
     return;
   }
-  // Framed for a live preview session: links to the site's pages stay in preview.
+  // Under /__preview, links to the site's pages stay in preview (and so in the admin's frame).
   const origins = [...new Set([input.origin, input.url.origin])];
-  for await (const chunk of renderPage(input)) yield stayInPreview(chunk, { origins, session });
+  for await (const chunk of renderPage(input)) yield stayInPreview(chunk, { origins });
 }
 
 async function* renderPage(input: DocumentInput): AsyncGenerator<string> {
@@ -78,13 +77,14 @@ async function* renderPage(input: DocumentInput): AsyncGenerator<string> {
     firstCss: blockCss(firstMods, codeBase),
     lang,
   }).value;
-  if (preview?.live) {
-    // Live preview only (framed by the admin with cw_session): the page side of the protocol.
-    yield html`<meta name="cw-admin-origin"${attrs({ content: preview.live.admin })}><script type="module"${attrs({ src: `${codeBase}/scripts/live-preview.js` })}></script>`
+  if (preview?.live && entry) {
+    // The draft, under /__preview only: the page side of live preview. It connects only when the
+    // admin frames the page, and does nothing otherwise.
+    yield html`<meta name="cw-admin-origin"${attrs({ content: preview.live.admin })}><meta name="cw-entry"${attrs({ content: entry.id, 'data-content-type': entry.contentType, 'data-locale': lang })}><script type="module"${attrs({ src: `${codeBase}/scripts/live-preview.js` })}></script>`
       .value;
   }
   yield '</head><body>';
-  if (preview?.session) {
+  if (preview?.framed) {
     // Framed by the admin, which has its own controls: an exit link would load a public page,
     // and public pages refuse to be framed.
     yield html`<div class="preview-bar" role="status">Previewing a draft.</div>`.value;
@@ -92,7 +92,7 @@ async function* renderPage(input: DocumentInput): AsyncGenerator<string> {
     yield html`<div class="preview-bar" role="status">Previewing a draft. <a href="${`/__preview/exit?to=${encodeURIComponent(preview.path)}`}">Exit preview</a></div>`
       .value;
   }
-  const slot = marks && isBlocksField(entry?.fields?.sections) ? 'sections' : null;
+  const slot = marks && isBlocksField(entry?.fields?.sections) ? marks('sections') : null;
   yield html`<a class="skip-link" href="#main">Skip to content</a><header>${blockShell(CHROME.header, CHROME.header.default(settings, ctx))}</header><main${attrs({ id: 'main', 'data-cw-slot': slot })}>`
     .value;
 
@@ -105,7 +105,10 @@ async function* renderPage(input: DocumentInput): AsyncGenerator<string> {
     .value;
 }
 
-/** Makes the `data-cw-ref` value for one of the draft's fields, or null outside a draft preview. */
+/**
+ * Makes the `data-cw-ref` value for a field path of the draft (`title`, `sections[<key>]`,
+ * `sections[<key>].heading`), or null outside a draft preview.
+ */
 export type Marks = ((field: string) => string) | null;
 
 export function marksFor(preview: PreviewState | undefined): Marks {
@@ -218,29 +221,44 @@ const titledBy = (section: Entry): boolean =>
   (section.contentType === DEFAULT_CONTENT && Boolean(section.fields.heading)) ||
   Boolean(BLOCKS.get(section.contentType)?.ownsTitle);
 
+/** The ref path of a blocks-field section (`sections[<key>]`), or null. */
+function blockPath(section: Entry): string | null {
+  const key = blockKey(section);
+  return key ? formatFieldPath({ field: 'sections', steps: [{ key }] }) : null;
+}
+
 function renderSection(section: Entry, index: number, ctx: RenderCtx, marks: Marks): Safe {
   const style = section.fields?.style ? toClassName(section.fields.style) : null;
   // Every section starts 'initialized'; scripts/lib.js marks it 'loaded' once its block JS ran.
   const status = 'initialized';
+  const path = marks ? blockPath(section) : null;
+  const blockRef = marks && path ? marks(path) : null;
   if (section.contentType === DEFAULT_CONTENT) {
-    // A page's own body and title (sectionsOf) carry the page's refs; a richText block its key.
-    const own = marks && PAGE_BODY.has(section) ? marks : null;
+    // A page's own body and title (sectionsOf) carry the page's refs; a richText block its own.
+    const own = marks && PAGE_BODY.has(section);
     const { heading, body } = section.fields;
     let title: Safe | string = '';
     if (heading && index === 0 && ctx.headingLevel === 1) {
-      title = html`<h1${attrs({ 'data-cw-ref': own ? own('title') : null })}>${heading}</h1>`;
+      const ref = own ? marks('title') : marks && path ? marks(`${path}.heading`) : null;
+      title = html`<h1${attrs({ 'data-cw-ref': ref })}>${heading}</h1>`;
       ctx.headingLevel = 2;
     }
-    return html`<section${attrs({ class: ['section', style].filter(Boolean).join(' '), 'data-section-status': status, 'data-cw-block': marks ? (blockKey(section) ?? null) : null, 'data-cw-ref': own ? own('body') : null })}><div class="default-content-wrapper">${title}${renderRichText(body, ctx)}</div></section>`;
+    return html`<section${attrs({ class: ['section', style].filter(Boolean).join(' '), 'data-section-status': status, 'data-cw-ref': own ? marks('body') : blockRef })}><div class="default-content-wrapper">${title}${renderRichText(body, ctx)}</div></section>`;
   }
   const mod = BLOCKS.get(section.contentType);
   if (!mod) return html``;
   ctx.usedBlocks.add(mod);
-  return html`<section${attrs({
-    class: ['section', `${mod.name}-container`, style].filter(Boolean).join(' '),
-    'data-section-status': status,
-    'data-cw-block': marks ? (blockKey(section) ?? null) : null,
-  })}><div class="${mod.name}-wrapper">${blockShell(mod, mod.default(section, ctx))}</div></section>`;
+  const ref = ctx.ref;
+  if (marks && path) ctx.ref = (field) => attrs({ 'data-cw-ref': marks(`${path}.${field}`) });
+  try {
+    return html`<section${attrs({
+      class: ['section', `${mod.name}-container`, style].filter(Boolean).join(' '),
+      'data-section-status': status,
+      'data-cw-ref': blockRef,
+    })}><div class="${mod.name}-wrapper">${blockShell(mod, mod.default(section, ctx))}</div></section>`;
+  } finally {
+    ctx.ref = ref;
+  }
 }
 
 function notFoundSection() {

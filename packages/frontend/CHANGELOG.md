@@ -14,19 +14,20 @@ Bump `version` in `package.json`, add its section here, merge, then push the tag
 ## Unreleased
 
 - Preview links can carry the token in the fragment (`/__preview?entry={id}#token={token}`), so it
-  never reaches a log or a `Referer`; `?token=` still works.
-- Preview pages are ready to be framed by the ContentWorker admin: `frame-ancestors` names the
-  admin origin only (derived from `CONTENTWORKER`, or the new optional `CONTENTWORKER_ADMIN`),
-  `Referrer-Policy: no-referrer`, and the preview cookie is `SameSite=None; Secure; Partitioned`.
-- Under `/__preview` only, drafts carry `data-cw-slot`, `data-cw-block` and `data-cw-ref`;
-  `POST /__preview/render` re-renders blocks from unsaved fields; `scripts/live-preview.js` (a stub
-  until `@contentworker/sdk/live-preview` is published) loads when the URL has `cw_session`.
-  Public pages are unchanged.
-- Grants also clear the unpartitioned `SameSite=Lax` cookie earlier releases set; a preview link
-  sets the cookie only for a navigation; `/__preview/exit?to=` goes only to a path on the site.
-- A malformed `CONTENTWORKER_ADMIN` is logged and turns framing off instead of failing renders.
-- In a live preview session, links to the site's pages stay under `/__preview` with the session,
-  in page renders and in re-rendered blocks.
+  never reaches a log or a `Referer`; `?token=` still works, and sets the cookie only for a
+  navigation. `/__preview/exit?to=` goes only to a path on the site.
+- Preview pages are ready to be framed by the ContentWorker admin for live preview:
+  `frame-ancestors` names the admin origin only (derived from `CONTENTWORKER`, or the new optional
+  `CONTENTWORKER_ADMIN`; never the site's own origin; a malformed value is logged and turns
+  framing off), `Referrer-Policy: no-referrer`, and the preview cookie is
+  `SameSite=None; Secure; Partitioned` (grants also clear the older unpartitioned cookie).
+- Under `/__preview` only, drafts carry content refs with field paths (`data-cw-ref` on fields and
+  blocks, `data-cw-slot` on the blocks' container); block renderers mark their own fields with
+  `ctx.ref(field)`. `POST /__preview/render` re-renders blocks, named by their refs, from unsaved
+  fields. Links to the site's pages stay under `/__preview`.
+- `scripts/live-preview.js` (calls `connectPreview` from `@contentworker/sdk/live-preview` once it
+  is published; a stub until then) loads on `/__preview` pages showing a draft, and shows
+  Coworker's proposals as ghosts (`styles/preview.css`). Public pages are unchanged.
 
 ## 0.3.0
 

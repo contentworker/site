@@ -34,14 +34,6 @@ test('a ?token= link sets a partitioned, framable cookie and redirects to the dr
   assertPreviewHeaders(res);
 });
 
-test('a live preview session carries through the redirect', async () => {
-  const { res } = await call('/__preview?entry=p-about&token=pw_good&cw_session=sess_12345678');
-  assert.equal(res.headers.get('location'), '/__preview/about?cw_session=sess_12345678');
-  // A malformed session is dropped, never echoed.
-  const odd = await call('/__preview?entry=p-about&token=pw_good&cw_session=%3Cx%3E');
-  assert.equal(odd.res.headers.get('location'), '/__preview/about');
-});
-
 test('an invalid or expired token is refused; a malformed entry is a 400', async () => {
   assert.equal((await call('/__preview?entry=p-about&token=pw_bad')).res.status, 403);
   assert.equal((await call('/__preview?entry=p~x&token=pw_good')).res.status, 400);
@@ -104,18 +96,18 @@ async function runHandoff(href: string, answer: { status: number; json?: unknown
 
 test('the handoff script drops the fragment first, posts the token, and follows the answer', async () => {
   const { log } = await runHandoff(
-    `${'https://contentworker.site'}/__preview?entry=p-about&cw_session=sess_12345678#token=pw_good`,
-    { status: 200, json: { location: '/__preview/about?cw_session=sess_12345678' } },
+    'https://contentworker.site/__preview?entry=p-about&x=1#token=pw_good',
+    { status: 200, json: { location: '/__preview/about' } },
   );
-  assert.deepEqual(log[0], ['replaceState', '/__preview?entry=p-about&cw_session=sess_12345678']);
+  assert.deepEqual(log[0], ['replaceState', '/__preview?entry=p-about&x=1']);
   const [, to, init] = log[1] as [string, string, RequestInit & { body: unknown }];
   assert.equal(to, '/__preview');
   assert.equal(init.method, 'POST');
   // Preview pages send no Referer, which would blank Origin on the POST; this keeps it.
   assert.equal(init.referrerPolicy, 'same-origin');
   assert.equal(init.credentials, 'same-origin');
-  assert.deepEqual(init.body, { entry: 'p-about', token: 'pw_good', session: 'sess_12345678' });
-  assert.deepEqual(log[2], ['replace', '/__preview/about?cw_session=sess_12345678']);
+  assert.deepEqual(init.body, { entry: 'p-about', token: 'pw_good' });
+  assert.deepEqual(log[2], ['replace', '/__preview/about']);
 });
 
 test('the handoff script refuses to go anywhere but /__preview/, and says why it stopped', async () => {
@@ -147,10 +139,9 @@ test('POST /__preview trades a token for the cookie and answers where to go', as
   const { res, body } = await post('/__preview', {
     entry: 'p-about',
     token: 'pw_good',
-    session: 'sess_12345678',
   });
   assert.equal(res.status, 200);
-  assert.deepEqual(JSON.parse(body), { location: '/__preview/about?cw_session=sess_12345678' });
+  assert.deepEqual(JSON.parse(body), { location: '/__preview/about' });
   assertGrantCookies(res);
   assert.match(res.headers.get('content-type') ?? '', /^application\/json/);
   assertPreviewHeaders(res);
@@ -186,8 +177,11 @@ test('the draft renders under /__preview: uncached, noindex, framable by the adm
   assert.equal(res.headers.get('cache-control'), 'private, no-store');
   assert.equal(res.headers.get('cache-tag'), null);
   assertPreviewHeaders(res);
-  // Only a live page (cw_session) may create the cw-preview Trusted Types policy.
-  assert.match(res.headers.get('content-security-policy') ?? '', /trusted-types loader(;|$)/);
+  // A page showing the draft runs the live preview script, so it may create cw-preview.
+  assert.match(
+    res.headers.get('content-security-policy') ?? '',
+    /trusted-types loader cw-preview(;|$)/,
+  );
   assert.match(body, /<h1[^>]*>About \(draft\)<\/h1><p>Unpublished words.<\/p>/);
   assert.match(body, /<meta name="robots" content="noindex">/);
   assert.doesNotMatch(body, /rel="canonical"/);
@@ -312,14 +306,24 @@ test('with an old unpartitioned grant beside the new one, the draft for the path
   const { body } = await call('/__preview/about', { cookie });
   assert.match(body, /About \(draft\)/);
   const inline = await call('/__preview/inline', { cookie });
-  assert.match(inline.body, /data-cw-block="k-hero"/);
+  assert.match(
+    inline.body,
+    /data-cw-ref="site\|main\|p-inline\|page\|sections%5Bk-hero%5D\|en-US"/,
+  );
 });
 
-test('a live preview page allows the cw-preview policy and drops the exit link', async () => {
-  const { res, body } = await call('/__preview/inline?cw_session=sess_12345678', {
+test('in a frame the preview bar drops its exit link; elsewhere it keeps it', async () => {
+  const framed = await call('/__preview/inline', {
     cookie: 'cw_preview=p-inline~pw_good',
+    headers: { 'sec-fetch-dest': 'iframe' },
   });
-  assert.match(res.headers.get('content-security-policy') ?? '', /trusted-types loader cw-preview/);
-  assert.match(body, /<div class="preview-bar" role="status">Previewing a draft.<\/div>/);
-  assert.doesNotMatch(body, /__preview\/exit/);
+  assert.match(framed.body, /<div class="preview-bar" role="status">Previewing a draft.<\/div>/);
+  assert.doesNotMatch(framed.body, /__preview\/exit/);
+  const top = await call('/__preview/inline', { cookie: 'cw_preview=p-inline~pw_good' });
+  assert.match(top.body, /__preview\/exit/);
+});
+
+test('a preview page not showing the draft may not create the cw-preview policy', async () => {
+  const { res } = await call('/__preview/', { cookie: 'cw_preview=p-inline~pw_good' });
+  assert.match(res.headers.get('content-security-policy') ?? '', /trusted-types loader(;|$)/);
 });

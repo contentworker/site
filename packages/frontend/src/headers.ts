@@ -20,9 +20,9 @@ export const CSP = CSP_DIRECTIVES.join('; ');
 /**
  * The policy /__preview responses carry instead. Public pages may only be framed by the site
  * itself; preview pages only by the ContentWorker admin (live preview), never by the site or
- * anyone else, and by nobody when the admin origin isn't known. A live preview page (framed with
- * `cw_session`) also allows the Trusted Types policy `cw-preview`, which its script swaps
- * re-rendered blocks in through; no other page may create it.
+ * anyone else, and by nobody when the admin origin isn't known. A page showing the draft (with
+ * a known admin) runs the live preview script and also allows the Trusted Types policy
+ * `cw-preview`, which that script swaps re-rendered blocks in through; no other page may create it.
  */
 export function previewCsp(admin: string | null, live = false): string {
   return CSP_DIRECTIVES.map((d) =>
@@ -63,7 +63,7 @@ export interface HtmlHeaderOptions {
   preconnect?: string[];
   /** The admin origin allowed to frame a preview page (kind 'preview' only). */
   admin?: string | null;
-  /** A live preview page (kind 'preview' with `cw_session`). */
+  /** A live preview page (kind 'preview' showing the draft, admin known). */
   live?: boolean;
 }
 

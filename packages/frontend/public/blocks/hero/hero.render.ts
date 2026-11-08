@@ -18,6 +18,6 @@ export default function render(entry: Entry, ctx: RenderCtx): Safe {
   const Heading = ctx.headingLevel === 1 ? 'h1' : 'h2';
   ctx.headingLevel = 2;
   return html`${image ? html`<picture>${ctx.image(image, { sizes: '100vw' })}</picture>` : ''}<div class="hero-body">${ctx.raw(
-    `<${Heading}>`,
+    `<${Heading}${ctx.ref('heading')}>`,
   )}${heading}${ctx.raw(`</${Heading}>`)}${lead ? ctx.richText(lead) : ''}</div>`;
 }

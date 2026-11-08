@@ -22,8 +22,9 @@ import type { Entry, PreviewState } from './types.ts';
  *
  * The admin frames these pages for live preview, so the cookie is `SameSite=None; Partitioned`
  * (sent inside the admin's iframe, and kept in the admin's partition only) and every response
- * names the admin as the only origin that may frame it. With `cw_session` on the URL the page
- * also loads the live preview script, which re-renders blocks through POST /__preview/render.
+ * names the admin as the only origin that may frame it. A page showing the draft also loads the
+ * live preview script, which connects only inside the admin's frame and re-renders blocks
+ * through POST /__preview/render. Links to the site's pages stay under /__preview.
  */
 export const PREFIX = '/__preview';
 export const RENDER_PATH = `${PREFIX}/render`;
@@ -32,9 +33,6 @@ const MAX_AGE = 60 * 60;
 /** Entry ids are UUIDs (and test ids): no `~`, which separates the cookie's two parts. */
 const ENTRY_ID = /^[A-Za-z0-9_-]{1,128}$/;
 const TOKEN = /^[\w.-]{1,512}$/;
-/** A live preview session id, as `@contentworker/sdk/live-preview` checks it. */
-const SESSION = /^[A-Za-z0-9_-]{8,128}$/;
-export const SESSION_PARAM = 'cw_session';
 const MAX_HANDOFF_BYTES = 4 * 1024;
 
 /** Reads one draft entry with its preview token (no API key needed: the token is the grant). */
@@ -136,15 +134,12 @@ function text(
   });
 }
 
-/** Where a valid grant lands: the draft's path, carrying the live preview session through. */
-function landing(draft: Entry, session: string | null): string {
+/** Where a valid grant lands: the draft's path under /__preview. */
+function landing(draft: Entry): string {
   const path = pathFor(draft) ?? '/';
   const to = `${PREFIX}${path === '/' ? '/' : path}`;
-  return session ? `${to}?${new URLSearchParams({ [SESSION_PARAM]: session })}` : to;
+  return to;
 }
-
-const sessionOf = (value: unknown): string | null =>
-  typeof value === 'string' && SESSION.test(value) ? value : null;
 
 /**
  * A POST from this site's own pages: `Origin` must be exactly this origin (and Sec-Fetch-Site, when
@@ -213,7 +208,6 @@ async function grant(
   admin: string | null,
   entryId: unknown,
   token: unknown,
-  session: string | null,
   as: 'redirect' | 'json',
 ): Promise<Response> {
   if (
@@ -225,7 +219,7 @@ async function grant(
     return text(admin, 'Missing entry or token.', 400);
   const draft = await fetchDraft(cw, entryId, token);
   if (!draft) return text(admin, 'This preview link is invalid or has expired.', 403);
-  const location = landing(draft, session);
+  const location = landing(draft);
   const value = `${encodeURIComponent(entryId)}~${token}`;
   if (as === 'redirect')
     return new Response(null, {
@@ -249,9 +243,9 @@ async function grant(
  * The fragment handoff, run by the page below. It reads `#token=` and drops the fragment from
  * history before anything else, so the token is gone from the address bar, history and any
  * later Referer, then trades it for the cookie and replaces itself with the draft. Reads the
- * entry and session from its own URL: nothing from the request is printed into the page.
+ * entry from its own URL: nothing from the request is printed into the page.
  */
-export const HANDOFF_SCRIPT = `(()=>{const q=new URLSearchParams(location.search),h=new URLSearchParams(location.hash.slice(1)),t=h.get('token'),s=document.getElementById('cw-status'),say=(m)=>{if(s)s.textContent=m};history.replaceState(null,'',location.pathname+location.search);if(!t){say('This preview link has no token.');return}fetch('${PREFIX}',{method:'POST',headers:{'content-type':'application/json'},credentials:'same-origin',referrerPolicy:'same-origin',body:JSON.stringify({entry:q.get('entry'),token:t,session:q.get('${SESSION_PARAM}')})}).then((r)=>r.ok?r.json():Promise.reject(r.status)).then((d)=>{if(typeof d.location!=='string'||!d.location.startsWith('${PREFIX}/'))throw 0;location.replace(d.location)}).catch((e)=>say(e===403?'This preview link is invalid or has expired.':'The preview could not start. Try the link again.'))})()`;
+export const HANDOFF_SCRIPT = `(()=>{const q=new URLSearchParams(location.search),h=new URLSearchParams(location.hash.slice(1)),t=h.get('token'),s=document.getElementById('cw-status'),say=(m)=>{if(s)s.textContent=m};history.replaceState(null,'',location.pathname+location.search);if(!t){say('This preview link has no token.');return}fetch('${PREFIX}',{method:'POST',headers:{'content-type':'application/json'},credentials:'same-origin',referrerPolicy:'same-origin',body:JSON.stringify({entry:q.get('entry'),token:t})}).then((r)=>r.ok?r.json():Promise.reject(r.status)).then((d)=>{if(typeof d.location!=='string'||!d.location.startsWith('${PREFIX}/'))throw 0;location.replace(d.location)}).catch((e)=>say(e===403?'This preview link is invalid or has expired.':'The preview could not start. Try the link again.'))})()`;
 
 const HANDOFF_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="referrer" content="no-referrer"><title>Opening preview</title></head><body><p id="cw-status" role="status">Opening the preview…</p><noscript><p>Preview links that carry the token after # need JavaScript. Use the ?token= form instead.</p></noscript><script>${HANDOFF_SCRIPT}</script></body></html>`;
 
@@ -301,8 +295,8 @@ export async function handlePreview(deps: PreviewDeps): Promise<Response> {
     if (url.pathname === PREFIX) {
       const read = await jsonBody(request, url, admin, MAX_HANDOFF_BYTES);
       if ('refused' in read) return read.refused;
-      const { entry, token, session } = read.body;
-      return grant(cw, admin, entry, token, sessionOf(session), 'json');
+      const { entry, token } = read.body;
+      return grant(cw, admin, entry, token, 'json');
     }
     if (url.pathname === RENDER_PATH) return renderPreviewBlocks({ request, url, cw, site, admin });
     return text(admin, 'Method not allowed', 405, { allow: 'GET, HEAD' });
@@ -311,10 +305,9 @@ export async function handlePreview(deps: PreviewDeps): Promise<Response> {
   if (url.pathname === PREFIX) {
     const entryId = url.searchParams.get('entry');
     const token = url.searchParams.get('token');
-    const session = sessionOf(url.searchParams.get(SESSION_PARAM));
     if (token !== null) {
       if (!isNavigation(request)) return text(admin, 'Open preview links as a page.', 403);
-      return grant(cw, admin, entryId, token, session, 'redirect');
+      return grant(cw, admin, entryId, token, 'redirect');
     }
     if (!entryId || !ENTRY_ID.test(entryId)) return text(admin, 'Missing entry or token.', 400);
     return handoffPage(admin);
@@ -339,7 +332,6 @@ export async function handlePreview(deps: PreviewDeps): Promise<Response> {
       break;
     }
   }
-  const session = sessionOf(url.searchParams.get(SESSION_PARAM));
   return render({
     path,
     admin,
@@ -347,8 +339,8 @@ export async function handlePreview(deps: PreviewDeps): Promise<Response> {
       entry,
       path,
       scope: { space: cw.space, environment: cw.environment, locale: cw.locale },
-      live: entry && session && admin ? { admin } : null,
-      session: session && admin ? session : null,
+      live: entry && admin ? { admin } : null,
+      framed: request.headers.get('sec-fetch-dest') === 'iframe',
     },
   });
 }

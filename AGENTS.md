@@ -49,9 +49,9 @@ Performance is the top priority: every other requirement yields to it.
   export is an uncached gateway that must stay cheap (no I/O on the hot path). Anything a page
   renders from must be in its `Cache-Tag` (`tagsFor`), or a publish won't purge it. Nothing
   personalised or per-request goes in cached HTML: no nonces, cookies or user data. Drafts live
-  only under `/__preview`, and so do the editing marks (`data-cw-slot`, `data-cw-block`,
-  `data-cw-ref`) and `scripts/live-preview.js`: a public render never changes for live preview
-  (`test/preview-marks.test.ts`).
+  only under `/__preview`, and so do the editing marks (`data-cw-ref`, `data-cw-slot`, through
+  `ctx.ref`), `scripts/live-preview.js` and `styles/preview.css`: a public render never changes
+  for live preview (`test/public-golden.test.ts`, `test/preview-marks.test.ts`).
 
 - **The HTML is finished at first byte.** Sections, wrappers, buttons, image attributes and the
   LCP choice are decided in the Worker. Block JS may add behaviour, elements and attributes; it

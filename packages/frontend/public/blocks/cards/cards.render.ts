@@ -33,7 +33,7 @@ export default function render(entry: Entry, ctx: RenderCtx): Safe {
       title ? ctx.raw(`<${itemLevel}>${title}</${itemLevel}>`) : ''
     }${item.body ? ctx.richText(item.body) : ''}</div></li>`;
   });
-  return html`${heading ? ctx.raw(`<${level}>${html`${heading}`}</${level}>`) : ''}<ul class="cards-list">${cards}</ul>`;
+  return html`${heading ? ctx.raw(`<${level}${ctx.ref('heading')}>${html`${heading}`}</${level}>`) : ''}<ul class="cards-list">${cards}</ul>`;
 }
 
 export function markdown(entry: Entry, ctx: MarkdownCtx): string {
