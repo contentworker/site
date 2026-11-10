@@ -47,12 +47,12 @@ export default function render(entry: Entry, ctx: RenderCtx): Safe {
 );
 write(
   `public/blocks/${name}/${name}.css`,
-  `/* ${name}: keep under 3 KB gzip; anything that changes layout belongs here, not in lazy CSS. */\n.${name} {\n  display: block;\n}\n`,
+  `/* ${name}: keep under 3 KB gzip; anything that changes layout belongs here, not in deferred CSS. */\n.${name} {\n  display: block;\n}\n`,
 );
 if (withJs) {
   write(
     `public/blocks/${name}/${name}.js`,
-    `/**\n * Enhances the server-rendered ${name} block: listeners and ARIA state only, never moving or\n * removing server content. Keep under 4 KB gzip.\n * @param {HTMLElement} block\n */\nexport default function decorate(block) {\n  block.dataset.enhanced = 'true';\n}\n`,
+    `/**\n * Enhances the server-rendered ${name} block: listeners and ARIA state only, never moving or\n * removing server content. Keep under 4 KB gzip.\n * @param {HTMLElement} block\n */\nexport default function enhance(block) {\n  block.dataset.enhanced = 'true';\n}\n`,
   );
 }
 

@@ -67,10 +67,7 @@ test('entry hyperlinks resolve to routes', () => {
 test('CTA rule: a lone bold link is a primary button, italic secondary, both accent', () => {
   const cta = (marks: string[]) =>
     render(doc(p({ nodeType: 'hyperlink', data: { uri: '/go' }, content: [text('Go', marks)] })));
-  assert.equal(
-    cta(['bold']),
-    '<p class="button-wrapper"><a href="/go" class="button primary">Go</a></p>',
-  );
+  assert.equal(cta(['bold']), '<p class="cta-row"><a href="/go" class="button primary">Go</a></p>');
   assert.match(cta(['italic']), /button secondary/);
   assert.match(cta(['bold', 'italic']), /button accent/);
   // A link sharing its paragraph with text stays a link.

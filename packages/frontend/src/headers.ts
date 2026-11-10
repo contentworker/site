@@ -4,7 +4,7 @@ import { BROWSER_HTML, EDGE_NOT_FOUND, EDGE_PAGE, NO_STORE } from './cache-polic
  * CSP for every page. Pages are cached at the edge and shared, so a per-response nonce would be
  * shared too, which defeats it. Instead: scripts only from this origin (the starter has no
  * inline scripts; JSON-LD is data, not script), Trusted Types for DOM sinks, no plugins, no
- * <base> hijacking, no framing. A third party added in the delayed phase adds its origin here.
+ * <base> hijacking, no framing. A third party added in the idle phase adds its origin here.
  */
 export const CSP_DIRECTIVES = [
   "script-src 'self'",
@@ -58,11 +58,11 @@ export function htmlHeaders({
   }
   if (etag) h.set('etag', etag);
   // Early Hints (when enabled on the zone) replays these before the HTML; browsers act on them
-  // either way: start eager.css and open the media connection while the page is still arriving.
+  // either way: start critical.css and open the media connection while the page is still arriving.
   h.set(
     'link',
     [
-      `<${codeBase}/styles/eager.css>; rel=preload; as=style`,
+      `<${codeBase}/styles/critical.css>; rel=preload; as=style`,
       ...preconnect.map((o) => `<${o}>; rel=preconnect`),
     ].join(', '),
   );

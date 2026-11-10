@@ -73,7 +73,7 @@ jobs:
           status=$(curl -s -o /tmp/home.html -w '%{http_code}' "$ORIGIN/")
           test "$status" = 200 || { echo "home page answered $status"; exit 1; }
           grep -q '<h1>' /tmp/home.html
-          grep -q "/v/${{ github.sha }}/styles/eager.css" /tmp/home.html || { echo "home page is not this build"; exit 1; }
+          grep -q "/v/${{ github.sha }}/styles/critical.css" /tmp/home.html || { echo "home page is not this build"; exit 1; }
           curl -fsS "$ORIGIN/sitemap.xml" | grep -q '<sitemapindex'
-          curl -fsSI "$ORIGIN/v/${{ github.sha }}/scripts/site.js" | grep -qi 'immutable'
+          curl -fsSI "$ORIGIN/v/${{ github.sha }}/scripts/boot.js" | grep -qi 'immutable'
           echo "contentworker.site is serving ${{ github.sha }}"

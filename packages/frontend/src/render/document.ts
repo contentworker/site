@@ -1,4 +1,4 @@
-import { toClassName } from '../../public/scripts/shared.js';
+import { classNameOf } from '../../public/scripts/shared.js';
 import { attrs, html, type Safe } from '../html.ts';
 import { type Entry, type Menus, type RenderCtx, sectionsIn } from '../types.ts';
 import { createRenderCtx } from './block-ctx.ts';
@@ -65,12 +65,12 @@ export async function* renderDocument(input: DocumentInput): AsyncGenerator<stri
     .value;
 
   if (entry?.contentType === 'listing') {
-    yield html`<section class="section listing-head"><div class="default-content-wrapper"><h1>${entry.fields.title}</h1></div></section>`
+    yield html`<section class="section listing-head"><div class="prose"><h1>${entry.fields.title}</h1></div></section>`
       .value;
     ctx.headingLevel = 2;
   } else if (entry && sections[0] && !titledBy(sections[0])) {
     // Every page has exactly one h1, before any block heading (heading order is an a11y audit).
-    yield html`<section class="section page-head"><div class="default-content-wrapper"><h1>${entry.fields.seo?.h1 || entry.fields.title}</h1></div></section>`
+    yield html`<section class="section page-head"><div class="prose"><h1>${entry.fields.seo?.h1 || entry.fields.title}</h1></div></section>`
       .value;
     ctx.headingLevel = 2;
   }
@@ -114,9 +114,9 @@ const titledBy = (section: Entry): boolean =>
   Boolean(BLOCKS.get(section.contentType)?.ownsTitle);
 
 function renderSection(section: Entry, index: number, ctx: RenderCtx): Safe {
-  const style = section.fields?.style ? toClassName(section.fields.style) : null;
-  // Every section starts 'initialized'; scripts/lib.js marks it 'loaded' once its block JS ran.
-  const status = 'initialized';
+  const style = section.fields?.style ? classNameOf(section.fields.style) : null;
+  // Every section starts 'pending'; scripts/enhance.js marks it 'done' once its block JS ran.
+  const state = 'pending';
   if (section.contentType === DEFAULT_CONTENT) {
     const { heading, body } = section.fields;
     let title: Safe | string = '';
@@ -124,17 +124,17 @@ function renderSection(section: Entry, index: number, ctx: RenderCtx): Safe {
       title = html`<h1>${heading}</h1>`;
       ctx.headingLevel = 2;
     }
-    return html`<section${attrs({ class: ['section', style].filter(Boolean).join(' '), 'data-section-status': status })}><div class="default-content-wrapper">${title}${renderRichText(body, ctx)}</div></section>`;
+    return html`<section${attrs({ class: ['section', style].filter(Boolean).join(' '), 'data-section-state': state })}><div class="prose">${title}${renderRichText(body, ctx)}</div></section>`;
   }
   const mod = BLOCKS.get(section.contentType);
   if (!mod) return html``;
   ctx.usedBlocks.add(mod);
   return html`<section${attrs({
-    class: ['section', `${mod.name}-container`, style].filter(Boolean).join(' '),
-    'data-section-status': status,
-  })}><div class="${mod.name}-wrapper">${blockShell(mod, mod.default(section, ctx))}</div></section>`;
+    class: ['section', `with-${mod.name}`, style].filter(Boolean).join(' '),
+    'data-section-state': state,
+  })}><div class="${mod.name}-frame">${blockShell(mod, mod.default(section, ctx))}</div></section>`;
 }
 
 function notFoundSection() {
-  return html`<section class="section not-found" data-section-status="loaded"><div class="default-content-wrapper"><h1>Page not found</h1><p>The page you asked for isn’t here. It may have moved.</p><p class="button-wrapper"><a class="button secondary" href="/">Go to the home page</a></p></div></section>`;
+  return html`<section class="section not-found" data-section-state="done"><div class="prose"><h1>Page not found</h1><p>The page you asked for isn’t here. It may have moved.</p><p class="cta-row"><a class="button secondary" href="/">Go to the home page</a></p></div></section>`;
 }

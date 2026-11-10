@@ -55,7 +55,7 @@
   },
   "overrides": [
     {
-      "includes": ["packages/frontend/public/styles/eager.css"],
+      "includes": ["packages/frontend/public/styles/critical.css"],
       "linter": {
         "rules": {
           "complexity": {

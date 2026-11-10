@@ -8,7 +8,7 @@ start a site. https://contentworker.site runs this repo unchanged.
   the entry for the URL, renders it to semantic HTML, streams it, and caches it tagged with
   everything it used. A publish purges exactly those pages.
 - **Static assets** (`public/`): the CSS and JS the browser loads, served exactly as written.
-- **Browser**: optional block behaviour in three phases (eager, lazy, delayed). Every page
+- **Browser**: optional block behaviour in three phases (critical, deferred, idle). Every page
   reads fully with JavaScript off.
 
 ## Start a site
@@ -64,7 +64,7 @@ Same Cloudflare account as the CMS? Use `"CONTENTWORKER": "<space>/<env>"` with 
   critical CSS when served (no extra request, and runtime updates keep reaching you). See the
   example at the top of the runtime's `public/styles/site.css`.
 - **Your own files** go in `public/`, and win over the runtime's at the same path (for example
-  `public/styles/eager.css` to restyle). Add `"assets": { "directory": "public", "binding": "ASSETS" }`.
+  `public/styles/critical.css` to restyle). Add `"assets": { "directory": "public", "binding": "ASSETS" }`.
 - **Your own blocks** (or replacements, matched by content type): `npm run new-block -- <name> [--js]`
   creates `blocks/<name>.render.ts` and `public/blocks/<name>/`, registers it in `src/worker.ts`
   (created on first use) and points `wrangler.jsonc` there. By hand, it looks like this:

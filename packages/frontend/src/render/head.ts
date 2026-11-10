@@ -113,8 +113,8 @@ export function jsonLd({
 }
 
 /**
- * Everything inside <head>. Only eager.css (and the first section's block CSS) is render-blocking;
- * site.js is a module (never blocks), lib.js is modulepreloaded so the import doesn't chain.
+ * Everything inside <head>. Only critical.css (and the first section's block CSS) is render-blocking;
+ * boot.js is a module (never blocks), enhance.js is modulepreloaded so the import doesn't chain.
  */
 export function renderHead({
   seo,
@@ -144,10 +144,10 @@ ${seo.siteName ? html`<meta property="og:site_name"${attrs({ content: seo.siteNa
 ${seo.image ? html`<meta property="og:image"${attrs({ content: seo.image })}>` : ''}
 ${seo.image ? html`<meta name="twitter:card" content="summary_large_image">` : ''}
 ${lang ? html`<meta property="og:locale"${attrs({ content: lang.replace('-', '_') })}>` : ''}
-<link rel="stylesheet"${attrs({ href: `${codeBase}/styles/eager.css` })}>
+<link rel="stylesheet"${attrs({ href: `${codeBase}/styles/critical.css` })}>
 ${firstCss.map((href: string) => html`<link rel="stylesheet"${attrs({ href })}>`)}
-<link rel="modulepreload"${attrs({ href: `${codeBase}/scripts/lib.js` })}>
-<script type="module"${attrs({ src: `${codeBase}/scripts/site.js` })}></script>
+<link rel="modulepreload"${attrs({ href: `${codeBase}/scripts/enhance.js` })}>
+<script type="module"${attrs({ src: `${codeBase}/scripts/boot.js` })}></script>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 ${ld ? html`<script type="application/ld+json">${jsonForScript(ld)}</script>` : ''}`;
 }

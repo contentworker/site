@@ -58,7 +58,7 @@ if (withJs) {
  * remove server content. Budget: 4 KB gzip.
  * @param {HTMLElement} block
  */
-export default function decorate(block) {
+export default function enhance(block) {
   block.dataset.enhanced = 'true';
 }
 `,

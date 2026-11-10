@@ -1,17 +1,17 @@
 /*
  * A site's theme. Put your own copy at public/styles/site.css in your site: the runtime appends
- * it to eager.css when serving it (no extra request), after every runtime rule, so token
+ * it to critical.css when serving it (no extra request), after every runtime rule, so token
  * overrides win. Override the tokens rather than the rules, so runtime updates keep reaching you:
  *
  *   :root {
- *     --link-color: #0b6e4f;
- *     --body-font-family: "Inter", inter-fallback, system-ui, sans-serif;
+ *     --color-link: #0b6e4f;
+ *     --font-body: "Inter", inter-fallback, system-ui, sans-serif;
  *     --content-width: 1080px;
  *   }
  *   @media (prefers-color-scheme: dark) {
- *     :root { --link-color: #6fe3b9; }
+ *     :root { --color-link: #6fe3b9; }
  *   }
  *
- * Keep it small: it is render-blocking, and counts toward the 8 KB eager CSS budget. Check
+ * Keep it small: it is render-blocking, and counts toward the 8 KB critical CSS budget. Check
  * contrast for both colour schemes; the Lighthouse gate does.
  */

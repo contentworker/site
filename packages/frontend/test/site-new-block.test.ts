@@ -70,7 +70,7 @@ test('site-level new-block: scaffolds files, src/worker.ts and wrangler.jsonc, a
     await Promise.all(w.ctx.pending);
     assert.match(
       body,
-      /<div class="testimonial block" data-block-name="testimonial" data-block-status="initialized"><h2>Loved it<\/h2><\/div>/,
+      /<div class="testimonial block" data-block="testimonial" data-block-state="pending"><h2>Loved it<\/h2><\/div>/,
     );
     assert.match(body, /href="\/v\/abc123\/blocks\/testimonial\/testimonial.css"/);
   } finally {

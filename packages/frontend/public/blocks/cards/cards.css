@@ -11,10 +11,10 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--light-color);
+  border: 1px solid var(--color-surface);
   border-radius: 12px;
   overflow: hidden;
-  background-color: var(--background-color);
+  background-color: var(--color-bg);
 }
 
 .card-image img {
@@ -30,7 +30,7 @@
 
 .card h3 {
   margin-top: 0;
-  font-size: var(--heading-font-size-s);
+  font-size: var(--heading-s);
 }
 
 .card h3 a:any-link {
@@ -46,11 +46,11 @@
 }
 
 .card:has(h3 a:hover) {
-  border-color: var(--dark-color);
+  border-color: var(--color-muted);
 }
 
 .card:has(h3 a:focus-visible) {
-  outline: 3px solid var(--link-color);
+  outline: 3px solid var(--color-link);
   outline-offset: 2px;
 }
 

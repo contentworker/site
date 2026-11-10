@@ -4,7 +4,7 @@
  * nav closes it, and the menu resets when the viewport grows to desktop.
  * @param {Element} block
  */
-export default function decorate(block) {
+export default function enhance(block) {
   /** @type {HTMLDetailsElement | null} */
   const menu = block.querySelector('details.nav-menu');
   const nav = block.querySelector('.nav');

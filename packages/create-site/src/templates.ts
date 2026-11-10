@@ -5,7 +5,7 @@
  */
 
 /** The @contentworker/frontend range new sites depend on; a test holds it to the package. */
-export const FRONTEND_RANGE = '^0.3.0';
+export const FRONTEND_RANGE = '^0.4.0';
 /** wrangler for new sites: the version the runtime is tested with. */
 export const WRANGLER_RANGE = '^4.156.1';
 export const COMPATIBILITY_DATE = '2026-10-15';
@@ -93,8 +93,8 @@ export function files(site: SiteInput): Record<string, File> {
  * This site's theme: the runtime appends it to its critical CSS, after every runtime rule, so
  * overriding the tokens is enough. Keep it small; it counts toward the 8 KB critical CSS budget.
  *
- *   :root { --link-color: #0b6e4f; --content-width: 1080px; }
- *   @media (prefers-color-scheme: dark) { :root { --link-color: #6fe3b9; } }
+ *   :root { --color-link: #0b6e4f; --content-width: 1080px; }
+ *   @media (prefers-color-scheme: dark) { :root { --color-link: #6fe3b9; } }
  */
 `,
     },

@@ -4,8 +4,8 @@
   align-items: end;
   min-height: min(60vh, 560px);
   padding: 48px 24px;
-  color: var(--on-image-color);
-  background-color: var(--dark-color);
+  color: var(--color-on-image);
+  background-color: var(--color-muted);
   isolation: isolate;
 }
 
@@ -37,7 +37,7 @@
 .hero h1,
 .hero h2 {
   margin-top: 0;
-  font-size: var(--heading-font-size-xxl);
+  font-size: var(--heading-xxl);
 }
 
 .hero a:any-link {
@@ -45,9 +45,9 @@
 }
 
 .hero a.button.primary {
-  border-color: var(--on-image-color);
-  background-color: var(--on-image-color);
-  color: var(--text-color);
+  border-color: var(--color-on-image);
+  background-color: var(--color-on-image);
+  color: var(--color-text);
 }
 
 @media (width >= 900px) {
