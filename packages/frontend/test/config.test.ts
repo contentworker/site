@@ -67,3 +67,71 @@ test('misconfiguration says what to fix', () => {
     );
   }
 });
+
+test('admin origin: derived from cdn.<domain> or api.<domain>, or set; https only, never a wildcard', () => {
+  const k = { CONTENTWORKER_KEY: 'k' };
+  assert.equal(
+    backend({ CONTENTWORKER: 'https://cdn.acme.example/acme/main', ...k }).admin,
+    'https://acme.example',
+  );
+  assert.equal(
+    backend({
+      CONTENTWORKER: 'acme/main',
+      CONTENTWORKER_DELIVERY: binding,
+      CONTENTWORKER_PREVIEW: 'https://api.acme.example',
+      ...k,
+    }).admin,
+    'https://acme.example',
+  );
+  assert.equal(
+    backend({ CONTENTWORKER: 'acme/main', CONTENTWORKER_DELIVERY: binding, ...k }).admin,
+    null,
+  );
+  assert.equal(
+    backend({
+      CONTENTWORKER: 'https://cdn.acme.example/acme/main',
+      CONTENTWORKER_ADMIN: 'https://studio.acme.example/',
+      ...k,
+    }).admin,
+    'https://studio.acme.example',
+  );
+  assert.equal(
+    backend({
+      CONTENTWORKER: 'acme/main',
+      CONTENTWORKER_DELIVERY: binding,
+      CONTENTWORKER_ADMIN: 'http://localhost:5173',
+      ...k,
+    }).admin,
+    'http://localhost:5173',
+  );
+  // Normalised, and a value that still isn't an origin disables framing rather than throwing.
+  assert.equal(
+    backend({
+      CONTENTWORKER: 'acme/main',
+      CONTENTWORKER_DELIVERY: binding,
+      CONTENTWORKER_ADMIN: 'https://Studio.ACME.example:443',
+      ...k,
+    }).admin,
+    'https://studio.acme.example',
+  );
+  for (const bad of [
+    '*',
+    'https://*.acme.example',
+    'http://acme.example',
+    'https://acme.example/admin',
+    'https://acme.example?x',
+    'https://u:p@acme.example',
+    'acme.example',
+  ]) {
+    assert.equal(
+      backend({
+        CONTENTWORKER: 'acme/main',
+        CONTENTWORKER_DELIVERY: binding,
+        CONTENTWORKER_ADMIN: bad,
+        ...k,
+      }).admin,
+      null,
+      bad,
+    );
+  }
+});

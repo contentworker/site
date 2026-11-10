@@ -3,7 +3,7 @@ import { isVersioned } from './assets.ts';
 import { ensureCmsRoutes } from './cms-routes.ts';
 import { backend, ConfigError } from './config.ts';
 import { createDelivery, DeliveryError } from './delivery.ts';
-import { textHeaders } from './headers.ts';
+import { previewHeaders, textHeaders } from './headers.ts';
 import { hostRedirect } from './host.ts';
 import { withNonce } from './nonce.ts';
 import { handlePreview, PREFIX as PREVIEW } from './preview.ts';
@@ -54,21 +54,34 @@ async function route(request: Request, env: SiteEnv, ctx: ExecutionContext): Pro
             ctx.exports.PurgeQueue.get(ctx.exports.PurgeQueue.idFromName('purge')).add(tags),
         });
       }
-      if (request.method !== 'GET' && request.method !== 'HEAD') {
+      const previewing = url.pathname === PREVIEW || url.pathname.startsWith(`${PREVIEW}/`);
+      // POST /__preview (the fragment handoff) and /__preview/render are the only other methods.
+      const read = request.method === 'GET' || request.method === 'HEAD';
+      if (!read && !(previewing && request.method === 'POST')) {
         return new Response('Method not allowed', {
           status: 405,
           headers: textHeaders({ allow: 'GET, HEAD' }),
         });
       }
-      if (url.pathname === PREVIEW || url.pathname.startsWith(`${PREVIEW}/`)) {
+      if (previewing) {
         const cw = backend(env);
         await ensureCmsRoutes(createDelivery(cw));
         return await handlePreview({
           request,
           url,
           cw,
-          render: ({ path, preview }) =>
-            renderPage({ env, ctx, url, path, request, preview, delivery: createDelivery(cw) }),
+          site: { origin: env.SITE_ORIGIN || url.origin, codeBase: `/v/${env.BUILD_ID}` },
+          render: ({ path, preview, admin }) =>
+            renderPage({
+              env,
+              ctx,
+              url,
+              path,
+              request,
+              preview,
+              admin,
+              delivery: createDelivery(cw),
+            }),
         });
       }
       if (!isVersioned(url.pathname)) {
@@ -152,6 +165,8 @@ function forCache(request: Request, url: URL): Request {
 }
 
 function failure(error: unknown, url: URL): Response {
+  // Preview errors keep preview's policy: never framed, no Referer, never indexed.
+  const extra = url.pathname.startsWith(PREVIEW) ? previewHeaders(null) : {};
   console.error(
     JSON.stringify({ msg: 'request failed', path: url.pathname, error: String(error) }),
   );
@@ -160,13 +175,13 @@ function failure(error: unknown, url: URL): Response {
     const local = /^(localhost|127\.0\.0\.1)$/.test(url.hostname);
     return new Response(local ? `Configuration: ${error.message}` : 'Site misconfigured.', {
       status: 500,
-      headers: textHeaders(),
+      headers: textHeaders(extra),
     });
   }
   const status = error instanceof DeliveryError ? 503 : 500;
   return new Response('This page is temporarily unavailable. Please try again shortly.', {
     status,
-    headers: textHeaders({ 'retry-after': '30' }),
+    headers: textHeaders({ ...extra, 'retry-after': '30' }),
   });
 }
 

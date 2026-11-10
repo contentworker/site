@@ -17,6 +17,32 @@ export const CSP_DIRECTIVES = [
 /** The policy cached pages carry; the gateway upgrades it with a nonce (src/nonce.ts). */
 export const CSP = CSP_DIRECTIVES.join('; ');
 
+/**
+ * The policy /__preview responses carry instead. Public pages may only be framed by the site
+ * itself; preview pages only by the ContentWorker admin (live preview), never by the site or
+ * anyone else, and by nobody when the admin origin isn't known. A page showing the draft (with
+ * a known admin) runs the live preview script and also allows the Trusted Types policy
+ * `cw-preview`, which that script swaps re-rendered blocks in through; no other page may create it.
+ */
+export function previewCsp(admin: string | null, live = false): string {
+  return CSP_DIRECTIVES.map((d) =>
+    d.startsWith('frame-ancestors ')
+      ? `frame-ancestors ${admin ?? "'none'"}`
+      : live && d.startsWith('trusted-types ')
+        ? `${d} cw-preview`
+        : d,
+  ).join('; ');
+}
+
+/** Headers every /__preview response adds: its own CSP, no Referer, never indexed. */
+export function previewHeaders(admin: string | null, live = false): Record<string, string> {
+  return {
+    'content-security-policy': previewCsp(admin, live),
+    'referrer-policy': 'no-referrer',
+    'x-robots-tag': 'noindex',
+  };
+}
+
 const SECURITY = {
   'content-security-policy': CSP,
   'strict-transport-security': 'max-age=31536000; includeSubDomains',
@@ -28,8 +54,6 @@ const SECURITY = {
 
 /**
  * Headers for an HTML page.
- * @param {{ kind: 'page' | 'not-found' | 'preview', tags?: string[], etag?: string,
- *   codeBase: string, preconnect?: string[] }} opts
  */
 export interface HtmlHeaderOptions {
   kind: 'page' | 'not-found' | 'preview';
@@ -37,6 +61,10 @@ export interface HtmlHeaderOptions {
   etag?: string | null;
   codeBase: string;
   preconnect?: string[];
+  /** The admin origin allowed to frame a preview page (kind 'preview' only). */
+  admin?: string | null;
+  /** A live preview page (kind 'preview' showing the draft, admin known). */
+  live?: boolean;
 }
 
 export function htmlHeaders({
@@ -45,11 +73,13 @@ export function htmlHeaders({
   etag,
   codeBase,
   preconnect = [],
+  admin = null,
+  live = false,
 }: HtmlHeaderOptions): Headers {
   const h = new Headers({ 'content-type': 'text/html; charset=utf-8', ...SECURITY });
   if (kind === 'preview') {
     h.set('cache-control', NO_STORE);
-    h.set('x-robots-tag', 'noindex');
+    for (const [k, v] of Object.entries(previewHeaders(admin, live))) h.set(k, v);
   } else {
     h.set('cache-control', BROWSER_HTML);
     // Edge-only TTL: Workers Caching reads it, browsers never see it.

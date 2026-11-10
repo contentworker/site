@@ -17,6 +17,21 @@
       "max": 8192
     },
     {
+      "name": "preview JS (only /__preview drafts)",
+      "files": ["scripts/live-preview.js"],
+      "max": 4096
+    },
+    {
+      "name": "vendored live preview SDK (only /__preview drafts)",
+      "dir": "scripts/vendor/sdk",
+      "max": 20480
+    },
+    {
+      "name": "preview CSS (only /__preview drafts)",
+      "files": ["styles/preview.css"],
+      "max": 1024
+    },
+    {
       "name": "idle JS",
       "files": ["scripts/idle.js", "scripts/consent.js", "scripts/consented.js"],
       "max": 20480

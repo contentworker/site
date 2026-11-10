@@ -1,4 +1,8 @@
+import { cssVars } from '../css-vars.ts';
 import { raw } from '../html.ts';
+
+const NO_REF = raw('');
+
 import { pathFor } from '../routes.ts';
 import { isEntry, type Menus, type RenderCtx } from '../types.ts';
 import { renderEmbedded } from './blocks.ts';
@@ -40,6 +44,8 @@ export function createRenderCtx({
     image: (asset, opts) => image(asset, ctx, opts),
     richText: (doc) => renderRichText(doc, ctx),
     renderBlock: (e) => renderEmbedded(e, ctx),
+    ref: () => NO_REF,
+    cssVars,
   };
   return ctx;
 }

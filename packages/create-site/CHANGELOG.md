@@ -3,6 +3,10 @@
 `@contentworker/create-site` follows semantic versioning. Release it like the runtime: bump
 `version`, add its section here, merge, then push the tag `create-site@v<version>`.
 
+## 0.1.3
+
+- New sites use `@contentworker/frontend` 0.5.0: live preview in the ContentWorker admin.
+
 ## 0.1.2
 
 - New sites use `@contentworker/frontend` 0.4.0, and the `site.css` template names its new

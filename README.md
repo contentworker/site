@@ -134,9 +134,56 @@ content and cached at the edge.
 ## Preview drafts
 
 Set the entry preview link in ContentWorker to
-`https://<your site>/__preview?entry={id}&token={token}`. Drafts render under `/__preview/…`,
-never cached and never indexed. If your Preview API isn't at `api.<domain>`, set
-`CONTENTWORKER_PREVIEW` to its origin.
+`https://<your site>/__preview?entry={id}#token={token}`. The token rides in the fragment, so it
+never reaches a server log or a `Referer`: the site answers a tiny page that reads it, removes it
+from the address bar and history, and submits it in a same-origin form POST for an HttpOnly
+cookie scoped to `/__preview`. The older `?entry={id}&token={token}` form still works. Drafts render
+under `/__preview/…`, never cached and never indexed. If your Preview API isn't at
+`api.<domain>`, set `CONTENTWORKER_PREVIEW` to its origin.
+
+A preview link is a bearer link: anyone who opens it sees that entry's draft for an hour, in
+their own browser, under `/__preview` only. Share it like a password. Prefer the `#token=` form;
+`?token=` puts the token in the request URL, so it can reach request logs.
+
+### Live preview in the admin
+
+The ContentWorker admin frames `/__preview` pages (the entry editor's Site pane and the canvas)
+and re-renders each unsaved edit in them, through `connectPreview` from
+`@contentworker/sdk/live-preview`, which the runtime serves for you.
+Preview responses may be framed by the admin's origin only (`Content-Security-Policy:
+frame-ancestors <admin>`) and send no `Referer`; public pages still refuse every frame but their
+own. The admin's origin comes from your backend setting: `cdn.<domain>` (or a
+`CONTENTWORKER_PREVIEW` of `api.<domain>`) means the admin is `https://<domain>`. Otherwise, or
+over a service binding with a bare namespace, set it:
+
+```jsonc
+"vars": { "CONTENTWORKER_ADMIN": "https://<your admin host>" }
+```
+
+It must be an https origin (http only on localhost). A value that isn't one is logged and
+framing stays off, as it does when no admin can be found or the derived one is the site itself;
+public pages are never affected. The preview cookie is `SameSite=None; Secure; Partitioned`, so it
+works inside the admin's frame and lives only in the admin's partition there. A preview link sets
+it only when opened as a page (top level or in a frame), never as an image or other subresource.
+
+Under `/__preview`, the draft's markup says what is editable, in the content-ref format of
+`@contentworker/sdk`: `data-cw-ref` on the page's own fields (`title`, `body`), on each block
+(`sections[<key>]`) and on fields inside it (`sections[<key>].heading`), and `data-cw-slot` (the
+`sections` ref) on the element holding the blocks. Public pages carry none of it. A page showing
+the draft also loads `scripts/live-preview.js`, which connects only when the admin frames it,
+re-renders edited blocks through `POST /__preview/render` in the site's locale
+(`CONTENTWORKER_LOCALE`), and shows Coworker's proposed blocks as ghosts (`styles/preview.css`).
+
+On every `/__preview` page, links to the site's own pages point to `/__preview/<path>`, so browsing
+in the admin's frame shows drafts where they exist and published content elsewhere; external,
+`mailto:`, `tel:` and fragment links are left alone. Loaded in a frame, the preview bar drops its
+exit link: the admin has its own controls, and public pages can't load inside its frame. Your
+own block renderers can mark their fields too: `<h2${ctx.ref('heading')}>` adds the field's ref
+under preview and nothing on public pages.
+
+A block that styles itself from content writes CSS custom properties with
+`attrs({ style: ctx.cssVars({ '--accent': fields.accent }) })`: every value is checked with the
+SDK's `isSafeTokenValue` on every render, and an unsafe one is dropped whole.
 
 ## Develop
 
