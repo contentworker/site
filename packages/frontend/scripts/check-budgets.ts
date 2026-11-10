@@ -7,7 +7,8 @@ import { gzipSync } from 'node:zlib';
 const root = new URL('..', import.meta.url).pathname;
 const pub = join(root, 'public');
 interface Budgets {
-  groups: { name: string; files: string[]; max: number }[];
+  /** A group lists its files, or names a directory whose .js files it sums (vendored builds). */
+  groups: { name: string; files?: string[]; dir?: string; max: number }[];
   perBlock: Record<'css' | 'js', number>;
   blockExceptions?: Record<string, Partial<Record<'css' | 'js', number>>>;
 }
@@ -16,7 +17,18 @@ const gz = (file: string): number => gzipSync(readFileSync(file), { level: 9 }).
 
 const rows: { name: string; size: number; max: number; error?: string }[] = [];
 for (const group of budgets.groups) {
-  const missing = group.files.filter((f: string) => !existsSync(join(pub, f)));
+  const files =
+    group.files ??
+    (group.dir && existsSync(join(pub, group.dir))
+      ? readdirSync(join(pub, group.dir))
+          .filter((f) => f.endsWith('.js'))
+          .map((f) => join(group.dir as string, f))
+      : []);
+  if (!files.length) {
+    rows.push({ name: group.name, size: 0, max: group.max, error: `no files in ${group.dir}` });
+    continue;
+  }
+  const missing = files.filter((f: string) => !existsSync(join(pub, f)));
   if (missing.length)
     rows.push({
       name: group.name,
@@ -24,7 +36,7 @@ for (const group of budgets.groups) {
       max: group.max,
       error: `missing ${missing.join(', ')}`,
     });
-  const size = group.files
+  const size = files
     .filter((f: string) => existsSync(join(pub, f)))
     .reduce((n, f) => n + gz(join(pub, f)), 0);
   rows.push({ name: group.name, size, max: group.max });

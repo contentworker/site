@@ -172,7 +172,8 @@ export async function seed(o: SeedOptions): Promise<SeedReport> {
       contentType: 'image/png',
       title: { [o.locale]: a.title },
     });
-    const put = await doFetch(created.upload.url, {
+    // The signed upload URL may be relative to the API (a local stack answers one).
+    const put = await doFetch(new URL(created.upload.url, o.api).href, {
       method: 'PUT',
       headers: created.upload.headers,
       body: o.image(a.width, a.height, i + 1),

@@ -3,5 +3,6 @@ node_modules/
 .dev.vars
 .DS_Store
 packages/frontend/src/assets.generated.ts
+packages/frontend/public/scripts/vendor/
 packages/frontend/.tmp-site/
 packages/frontend/dist/

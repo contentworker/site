@@ -11,6 +11,7 @@ import { starterByType } from './starter-delivered.ts';
 function fakeManagement({
   types = [] as string[],
   counts = [] as { contentType: string; total: number }[],
+  relativeUploads = false,
 } = {}) {
   const calls: { method: string; path: string; body?: unknown }[] = [];
   let n = 0;
@@ -20,7 +21,8 @@ function fakeManagement({
     const path = url.pathname.replace('/spaces/site/environments/main', '');
     const body = typeof init.body === 'string' ? JSON.parse(init.body) : init.body;
     calls.push({ method, path, body });
-    if (url.host === 'upload.example') return new Response(null, { status: 200 });
+    if (url.host === 'upload.example' || url.pathname.startsWith('/media/'))
+      return new Response(null, { status: 200 });
     if (method === 'GET' && path === '/content-types')
       return Response.json({ items: types.map((apiId) => ({ apiId })) });
     if (method === 'GET' && path === '/content-types/entry-counts')
@@ -29,7 +31,10 @@ function fakeManagement({
       n += 1;
       return Response.json({
         asset: { id: `asset${n}` },
-        upload: { url: `https://upload.example/${n}`, headers: { 'content-type': 'image/png' } },
+        upload: {
+          url: relativeUploads ? `/media/site/main/${n}?sig=x` : `https://upload.example/${n}`,
+          headers: { 'content-type': 'image/png' },
+        },
       });
     }
     if (method === 'POST' && path === '/entries') {
@@ -164,4 +169,12 @@ test('every starter page renders: one h1, a description, headings in order, no b
       );
     }
   }
+});
+
+test('a signed upload URL relative to the API (a local stack answers one) resolves against it', async () => {
+  const m = fakeManagement({ relativeUploads: true });
+  await seed({ ...base, fetch: m.fetch });
+  const puts = m.calls.filter((c) => c.method === 'PUT');
+  assert.ok(puts.length > 0);
+  for (const put of puts) assert.match(put.path, /^\/media\/site\/main\/\d+$/);
 });

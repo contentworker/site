@@ -8,17 +8,45 @@
  * byte is unchanged. Outside workerd (node tests) there is no HTMLRewriter and responses pass
  * through with the `'self'` policy.
  */
-import { CSP_DIRECTIVES } from './headers.ts';
+import { CSP, CSP_DIRECTIVES } from './headers.ts';
 
 export function newNonce(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   return btoa(String.fromCharCode(...bytes));
 }
 
-/** The page CSP with a nonce: strict-dynamic for CSP3 browsers, 'self' for older ones. */
-export function nonceCsp(nonce: string): string {
-  return [`script-src 'nonce-${nonce}' 'strict-dynamic' 'self'`, ...CSP_DIRECTIVES.slice(1)].join(
-    '; ',
+/**
+ * A response's CSP with a nonce: strict-dynamic for CSP3 browsers, 'self' for older ones. Every
+ * page directive stays; one the response sets itself replaces the page's (a preview page's
+ * frame-ancestors and Trusted Types), and `script-src` always becomes the nonce.
+ *
+ * A header may join several policies with `,` (each is enforced). The first is merged as above;
+ * each later one keeps its own directives, with its `script-src`, if it has one, given the same
+ * nonce, so no policy blocks the scripts this response stamped.
+ */
+export function nonceCsp(nonce: string, policy: string = CSP): string {
+  const script = `script-src 'nonce-${nonce}' 'strict-dynamic' 'self'`;
+  const [first = '', ...others] = policy.split(',');
+  const own = directives(first);
+  const names = new Set([...CSP_DIRECTIVES.map(nameOf), ...own.keys()]);
+  names.delete('script-src');
+  const page = new Map(CSP_DIRECTIVES.map((d) => [nameOf(d), d] as const));
+  const merged = [script, ...[...names].map((n) => own.get(n) ?? page.get(n) ?? n)].join('; ');
+  const rest = others
+    .map((p) => [...directives(p)].map(([n, d]) => (n === 'script-src' ? script : d)).join('; '))
+    .filter(Boolean);
+  return [merged, ...rest].join(', ');
+}
+
+const nameOf = (directive: string): string => directive.split(/\s+/)[0] ?? directive;
+
+function directives(policy: string): Map<string, string> {
+  return new Map(
+    policy
+      .split(';')
+      .map((d) => d.trim())
+      .filter(Boolean)
+      .map((d) => [nameOf(d), d] as const),
   );
 }
 
@@ -46,7 +74,10 @@ export function withNonce(res: Response): Response {
   }
   const nonce = newNonce();
   const headers = new Headers(res.headers);
-  headers.set('content-security-policy', nonceCsp(nonce));
+  headers.set(
+    'content-security-policy',
+    nonceCsp(nonce, headers.get('content-security-policy') ?? CSP),
+  );
   // The bytes now differ per visitor; the content doesn't: a weak validator says exactly that.
   const etag = weak(headers.get('etag'));
   if (etag) headers.set('etag', etag);

@@ -41,3 +41,19 @@ test('no SITE_ORIGIN, or a malformed one, redirects nothing', () => {
   assert.equal(hostRedirect(new Request(url), url, undefined), null);
   assert.equal(hostRedirect(new Request(url), url, 'not a url'), null);
 });
+
+test('a www redirect of a preview link is never cached (its query can hold a token)', async () => {
+  const { hostRedirect } = await import('../src/host.ts');
+  const preview = hostRedirect(
+    new Request('https://www.contentworker.site/__preview?entry=e&token=pw_x'),
+    new URL('https://www.contentworker.site/__preview?entry=e&token=pw_x'),
+    'https://contentworker.site',
+  );
+  assert.equal(preview?.headers.get('cache-control'), 'no-store');
+  const page = hostRedirect(
+    new Request('https://www.contentworker.site/about'),
+    new URL('https://www.contentworker.site/about'),
+    'https://contentworker.site',
+  );
+  assert.equal(page?.headers.get('cache-control'), 'public, max-age=86400');
+});

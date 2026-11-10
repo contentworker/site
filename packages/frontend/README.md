@@ -35,5 +35,8 @@ Then `wrangler secret put CONTENTWORKER_KEY` (a Content Delivery API key).
   `defineSite({ routes })`.
 - **Any runtime file:** a file at the same path in your `public/` wins.
 - **Content model and starter content:** `npx contentworker-site seed --dry-run`.
+- **Live preview:** set a type's preview URL in ContentWorker to
+  `https://<your site>/__preview?entry={id}#token={token}`; the admin frames it and shows unsaved
+  edits as you type. `CONTENTWORKER_ADMIN` names the admin when it can't be derived.
 
 The full guide is at https://contentworker.site/integrate.

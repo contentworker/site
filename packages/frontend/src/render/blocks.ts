@@ -9,7 +9,7 @@ import * as fragment from '../../public/blocks/fragment/fragment.render.ts';
 import * as header from '../../public/blocks/header/header.render.ts';
 import * as hero from '../../public/blocks/hero/hero.render.ts';
 import * as media from '../../public/blocks/media/media.render.ts';
-import { attrs, html, type Safe } from '../html.ts';
+import { attrs, html, raw, type Safe } from '../html.ts';
 import {
   type BlockModule,
   type ChromeModule,
@@ -74,7 +74,14 @@ export function renderEmbedded(entry: Entry, ctx: RenderCtx): Safe {
   const mod = BLOCKS.get(entry.contentType);
   if (!mod) return html``;
   ctx.usedBlocks.add(mod);
-  return blockShell(mod, mod.default(entry, ctx));
+  // An embedded entry is another entry: the block around it can't name its fields.
+  const ref = ctx.ref;
+  ctx.ref = () => raw('');
+  try {
+    return blockShell(mod, mod.default(entry, ctx));
+  } finally {
+    ctx.ref = ref;
+  }
 }
 
 /** Every block module a section uses, including blocks inside fragments and rich text. */

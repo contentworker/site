@@ -25,7 +25,7 @@ export default function render(entry: Entry, ctx: RenderCtx): Safe {
   const level = `h${n}`;
   const itemLevel = `h${heading ? n + 1 : Math.max(n, 2)}`;
   if (heading && n === 1) ctx.headingLevel = 2;
-  return html`${heading ? ctx.raw(`<${level}>${html`${heading}`}</${level}>`) : ''}${itemsOf(
+  return html`${heading ? ctx.raw(`<${level}${ctx.ref('heading')}>${html`${heading}`}</${level}>`) : ''}${itemsOf(
     entry,
   ).map(
     (i: Fields) =>

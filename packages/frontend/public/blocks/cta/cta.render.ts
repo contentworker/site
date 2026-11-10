@@ -17,7 +17,7 @@ export default function render(entry: Entry, ctx: RenderCtx): Safe {
   const href = ctx.href(link ?? url);
   const v = VARIANTS.has(variant) ? variant : 'accent';
   ctx.headingLevel = 2;
-  return html`<div class="cta-body">${heading ? html`<h2>${heading}</h2>` : ''}${body ? ctx.richText(body) : ''}${
+  return html`<div class="cta-body">${heading ? html`<h2${ctx.ref('heading')}>${heading}</h2>` : ''}${body ? ctx.richText(body) : ''}${
     href && label
       ? html`<p class="cta-row"><a class="button ${v}" href="${href}">${label}</a></p>`
       : ''
