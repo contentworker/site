@@ -7,7 +7,13 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/.wrangler", "!**/node_modules", "!**/worker-configuration.d.ts"]
+    "includes": [
+      "**",
+      "!**/.wrangler",
+      "!**/node_modules",
+      "!**/worker-configuration.d.ts",
+      "!packages/frontend/public/scripts/vendor"
+    ]
   },
   "formatter": {
     "enabled": true,

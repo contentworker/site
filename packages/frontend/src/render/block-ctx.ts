@@ -1,3 +1,4 @@
+import { cssVars } from '../css-vars.ts';
 import { raw } from '../html.ts';
 
 const NO_REF = raw('');
@@ -44,6 +45,7 @@ export function createRenderCtx({
     richText: (doc) => renderRichText(doc, ctx),
     renderBlock: (e) => renderEmbedded(e, ctx),
     ref: () => NO_REF,
+    cssVars,
   };
   return ctx;
 }

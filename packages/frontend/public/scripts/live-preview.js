@@ -1,31 +1,17 @@
 /**
- * Live preview, the page side. Loaded only on /__preview pages showing a draft; connects only
- * when the admin frames the page. `onState` re-renders through POST /__preview/render and swaps
- * blocks by their `data-cw-ref`; `view.ghosts` get `data-cw-ghost` (styles/preview.css).
- *
- * STUB: `connectPreview` is null until @contentworker/sdk/live-preview is published. Then serve
- * its browser build beside this file and use `import { connectPreview } from './vendor/live-preview.js'`.
+ * Live preview, the page side. Loaded only on /__preview pages showing a draft; `connectPreview`
+ * (the vendored @contentworker/sdk/live-preview, scripts/embed-assets.ts) connects only when the
+ * admin frames the page. `onState` re-renders through POST /__preview/render and swaps blocks by
+ * their `data-cw-ref`; `view.ghosts` get `data-cw-ghost` (styles/preview.css).
  */
 import { loadSection, loadSections } from './lib.js';
+import { connectPreview, PAGE_REPORT_LIMIT } from './vendor/sdk/live-preview.js';
 
 /**
- * The shapes of `@contentworker/sdk/live-preview` that this file uses.
- * @typedef {'select' | 'patch.fields' | 'patch.blocks' | 'proposals' | 'scroll' | 'layout'} Capability
- * @typedef {Record<string, unknown>} LiveFields
- * @typedef {{ readonly rev: number, readonly withProposals: LiveFields, readonly ghosts: {
- *   readonly inserted: readonly string[], readonly changed: readonly string[],
- *   readonly removed: readonly string[] } }} LiveView
- * @typedef {{ readonly adminOrigin?: string, readonly capabilities: readonly Capability[],
- *   readonly onState: (entryId: string, locale: string, fields: LiveFields, view: LiveView) =>
- *   void | Promise<void> }} ConnectPreviewOptions
- * @typedef {{ readonly active: boolean, readonly connected: boolean,
- *   on(kind: 'connect', handler: () => void): () => void,
- *   emit(kind: 'page', body: { url: string, entries: { entryId: string, contentType: string,
- *   locale: string }[] }): void, refresh(): void, close(): void }} PreviewConnection
+ * @typedef {import('./vendor/sdk/live-preview.js').Capability} Capability
+ * @typedef {import('./vendor/sdk/live-preview.js').LiveFields} LiveFields
+ * @typedef {import('./vendor/sdk/live-preview.js').LiveView} LiveView
  */
-
-/** STUB until the SDK is published (see above). @type {((options: ConnectPreviewOptions) => PreviewConnection) | null} */
-const connectPreview = null;
 
 /** @type {Capability[]} */
 const CAPABILITIES = ['select', 'patch.fields', 'patch.blocks', 'proposals', 'scroll', 'layout'];
@@ -234,6 +220,13 @@ async function draw(entryId, locale, view, signal, stale, whole = false) {
   shown = fields;
 }
 
+/** Forgets what is on screen, so the next state re-renders <main> whole (a new session). */
+export function reset() {
+  latest += 1;
+  inflight?.abort();
+  shown = undefined;
+}
+
 const adminOrigin = document.querySelector('meta[name="cw-admin-origin"]')?.getAttribute('content');
 const entryMeta = document.querySelector('meta[name="cw-entry"]');
 const entry = {
@@ -241,10 +234,8 @@ const entry = {
   contentType: entryMeta?.getAttribute('data-content-type') ?? '',
   locale: entryMeta?.getAttribute('data-locale') ?? '',
 };
-if (adminOrigin && entry.entryId && connectPreview) {
-  const preview = /** @type {(options: ConnectPreviewOptions) => PreviewConnection} */ (
-    connectPreview
-  )({
+if (adminOrigin && entry.entryId) {
+  const preview = connectPreview({
     adminOrigin,
     capabilities: CAPABILITIES,
     onState(entryId, locale, fields, view) {
@@ -257,8 +248,10 @@ if (adminOrigin && entry.entryId && connectPreview) {
     link.rel = 'stylesheet';
     link.href = new URL('../styles/preview.css', import.meta.url).pathname;
     document.head.append(link);
-    preview.on('connect', () =>
-      preview.emit('page', { url: window.location.href, entries: [entry] }),
-    );
+    // The edited entry first; the admin reads at most PAGE_REPORT_LIMIT.
+    const entries = [entry].slice(0, PAGE_REPORT_LIMIT);
+    preview.on('connect', () => preview.emit('page', { url: window.location.href, entries }));
+    // A new session starts from a fresh entry.state: nothing on screen counts as rendered.
+    preview.on('disconnect', reset);
   }
 }

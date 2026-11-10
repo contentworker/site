@@ -208,3 +208,72 @@ test('the cw-preview policy passes only the markup a render response brought', a
     'used once',
   );
 });
+
+test('framed with the admin, the page connects through the SDK, reports its entry and renders state', async () => {
+  const ADMIN = 'https://admin.example';
+  const dom = new JSDOM(
+    `<!doctype html><head><meta name="cw-admin-origin" content="${ADMIN}"><meta name="cw-entry" content="p-inline" data-content-type="page" data-locale="en-US"></head><body><main id="main">${section('k-a', 'a')}</main></body>`,
+    { url: 'https://contentworker.site/__preview/inline', pretendToBeVisual: true },
+  );
+  const { window } = dom;
+  const posted: { data: Record<string, unknown>; origin: string }[] = [];
+  const parent = {
+    postMessage: (data: Record<string, unknown>, origin: string) => posted.push({ data, origin }),
+  };
+  Object.defineProperty(window, 'parent', { value: parent });
+  if (!window.crypto?.getRandomValues)
+    Object.defineProperty(window, 'crypto', { value: globalThis.crypto });
+  const requests: Record<string, unknown>[] = [];
+  Object.assign(globalThis, {
+    window,
+    document: window.document,
+    HTMLElement: window.HTMLElement,
+    CSS: { escape: (s: string) => s },
+    fetch: async (_to: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      requests.push(body);
+      return { ok: true, status: 200, json: async () => echo(body) };
+    },
+  });
+  await import(`../public/scripts/live-preview.js?${Math.random()}`);
+  const offer = posted.find((p) => p.data.kind === 'connect.offer');
+  assert.ok(offer, 'offered');
+  assert.equal(offer.origin, ADMIN);
+  assert.deepEqual(offer.data.capabilities, [
+    'select',
+    'patch.fields',
+    'patch.blocks',
+    'proposals',
+    'scroll',
+    'layout',
+  ]);
+  assert.ok(window.document.head.querySelector('link[href$="/styles/preview.css"]'));
+  const channel = offer.data.channel as string;
+  const version = (offer.data.versions as number[])[0];
+  const send = (data: Record<string, unknown>) =>
+    window.dispatchEvent(
+      new window.MessageEvent('message', {
+        data: { v: version, channel, ...data },
+        origin: ADMIN,
+        source: parent as unknown as Window,
+      }),
+    );
+  send({ kind: 'connect.accept', version, capabilities: offer.data.capabilities });
+  await new Promise((r) => setTimeout(r, 0));
+  const page = posted.find((p) => p.data.kind === 'page');
+  assert.deepEqual(page?.data.entries, [
+    { entryId: 'p-inline', contentType: 'page', locale: 'en-US' },
+  ]);
+  send({
+    kind: 'entry.state',
+    rev: 1,
+    entryId: 'p-inline',
+    locale: 'en-US',
+    fields: { title: 'T', sections: [block('k-a', 'typed')] },
+  });
+  for (let i = 0; i < 20 && !posted.some((p) => p.data.kind === 'applied'); i += 1)
+    await new Promise((r) => setTimeout(r, 10));
+  assert.equal(requests.length, 1);
+  assert.match(window.document.querySelector('main')?.innerHTML ?? '', /typed/);
+  assert.ok(posted.some((p) => p.data.kind === 'applied' && p.data.rev === 1));
+});

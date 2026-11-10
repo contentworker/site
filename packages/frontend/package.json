@@ -69,6 +69,6 @@
     "provenance": true
   },
   "dependencies": {
-    "@contentworker/sdk": "^0.1.0"
+    "@contentworker/sdk": "^0.3.0"
   }
 }

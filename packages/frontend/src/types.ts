@@ -107,6 +107,11 @@ export interface RenderCtx {
    * /__preview, so public renders never change.
    */
   ref: (field: string) => Safe;
+  /**
+   * A `style` value setting CSS custom properties from content, every value checked with
+   * `isSafeTokenValue` and dropped whole when it fails (src/css-vars.ts). Null when none is left.
+   */
+  cssVars: (vars: Record<string, unknown>) => string | null;
 }
 
 /** What Markdown rendering receives. */
