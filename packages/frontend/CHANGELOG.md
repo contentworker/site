@@ -11,7 +11,7 @@ tokens or options are **minor**; fixes that keep output stable are **patch**.
 Bump `version` in `package.json`, add its section here, merge, then push the tag
 `frontend@v<version>`: `release.yml` checks and publishes it to npm with provenance.
 
-## Unreleased
+## 0.5.0
 
 - **Live preview in the ContentWorker admin.** Pages under `/__preview` showing a draft load
   `scripts/live-preview.js`, which connects through `connectPreview` from
