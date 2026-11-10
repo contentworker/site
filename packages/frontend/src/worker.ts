@@ -3,7 +3,7 @@ import { isVersioned } from './assets.ts';
 import { ensureCmsRoutes } from './cms-routes.ts';
 import { backend, ConfigError } from './config.ts';
 import { createDelivery, DeliveryError } from './delivery.ts';
-import { textHeaders } from './headers.ts';
+import { previewHeaders, textHeaders } from './headers.ts';
 import { hostRedirect } from './host.ts';
 import { withNonce } from './nonce.ts';
 import { handlePreview, PREFIX as PREVIEW } from './preview.ts';
@@ -165,6 +165,8 @@ function forCache(request: Request, url: URL): Request {
 }
 
 function failure(error: unknown, url: URL): Response {
+  // Preview errors keep preview's policy: never framed, no Referer, never indexed.
+  const extra = url.pathname.startsWith(PREVIEW) ? previewHeaders(null) : {};
   console.error(
     JSON.stringify({ msg: 'request failed', path: url.pathname, error: String(error) }),
   );
@@ -173,13 +175,13 @@ function failure(error: unknown, url: URL): Response {
     const local = /^(localhost|127\.0\.0\.1)$/.test(url.hostname);
     return new Response(local ? `Configuration: ${error.message}` : 'Site misconfigured.', {
       status: 500,
-      headers: textHeaders(),
+      headers: textHeaders(extra),
     });
   }
   const status = error instanceof DeliveryError ? 503 : 500;
   return new Response('This page is temporarily unavailable. Please try again shortly.', {
     status,
-    headers: textHeaders({ 'retry-after': '30' }),
+    headers: textHeaders({ ...extra, 'retry-after': '30' }),
   });
 }
 

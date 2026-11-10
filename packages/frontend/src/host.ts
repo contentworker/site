@@ -25,7 +25,8 @@ export function hostRedirect(
     status,
     headers: {
       location: new URL(`${url.pathname}${url.search}`, canonical.origin).href,
-      'cache-control': 'public, max-age=86400',
+      // A preview link's query can hold its token: never let a browser keep that redirect.
+      'cache-control': url.pathname.startsWith('/__preview') ? 'no-store' : 'public, max-age=86400',
     },
   });
 }

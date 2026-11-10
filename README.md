@@ -141,6 +141,10 @@ cookie scoped to `/__preview`. The older `?entry={id}&token={token}` form still 
 under `/__preview/…`, never cached and never indexed. If your Preview API isn't at
 `api.<domain>`, set `CONTENTWORKER_PREVIEW` to its origin.
 
+A preview link is a bearer link: anyone who opens it sees that entry's draft for an hour, in
+their own browser, under `/__preview` only. Share it like a password. Prefer the `#token=` form;
+`?token=` puts the token in the request URL, so it can reach request logs.
+
 ### Live preview in the admin
 
 The ContentWorker admin frames `/__preview` pages (the entry editor's Site pane and the canvas)

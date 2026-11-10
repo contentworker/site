@@ -307,3 +307,14 @@ test('a preview page not showing the draft may not create the cw-preview policy'
   const { res } = await call('/__preview/', { cookie: 'cw_preview=p-inline~pw_good' });
   assert.match(res.headers.get('content-security-policy') ?? '', /trusted-types loader(;|$)/);
 });
+
+test('a preview request that fails keeps the preview policy', async () => {
+  const { res } = await call('/__preview/about', {
+    cookie: 'cw_preview=p-about~pw_good',
+    env: { CONTENTWORKER_DELIVERY: { fetch: async () => new Response('boom', { status: 500 }) } },
+  });
+  assert.ok(res.status >= 500);
+  assert.match(res.headers.get('content-security-policy') ?? '', /frame-ancestors 'none'/);
+  assert.equal(res.headers.get('referrer-policy'), 'no-referrer');
+  assert.equal(res.headers.get('x-robots-tag'), 'noindex');
+});

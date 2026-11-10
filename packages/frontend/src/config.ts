@@ -133,7 +133,7 @@ function adminOrigin(
         : null;
   if (derived)
     notice(
-      'info',
+      'warn',
       `Preview pages may be framed by ${derived} (derived from the ContentWorker hosts); set CONTENTWORKER_ADMIN to name the admin explicitly.`,
     );
   return derived;
@@ -141,7 +141,7 @@ function adminOrigin(
 
 const noticed = new Set<string>();
 /** Logs a configuration notice once per isolate, not once per request. */
-function notice(level: 'info' | 'error', msg: string): void {
+function notice(level: 'warn' | 'error', msg: string): void {
   if (noticed.has(msg)) return;
   noticed.add(msg);
   console[level](JSON.stringify({ msg }));

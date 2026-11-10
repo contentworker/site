@@ -253,3 +253,32 @@ test('a link resolves to the shallowest copy the draft embeds', () => {
   const entry = overlay(shallowLater, { pick: { id: 'e-x', linkType: 'Entry' } });
   assert.equal(entry.fields.pick, full);
 });
+
+test('a few bytes of links to an embedded entry cannot make the render explode', async () => {
+  // The draft embeds an entry once; the request links to it twenty thousand times.
+  const big = {
+    id: 'e-big',
+    contentType: 'cta',
+    fields: {
+      heading: 'Big',
+      body: {
+        nodeType: 'document',
+        content: Array(60).fill({
+          nodeType: 'paragraph',
+          content: [{ nodeType: 'text', value: 'x'.repeat(20), marks: [] }],
+        }),
+      },
+    },
+  };
+  const withEmbed = { ...inline, fields: { ...inline.fields, embed: big } };
+  const many = { sections: Array(20_000).fill({ id: 'e-big', linkType: 'Entry' }) };
+  assert.throws(() => overlay(withEmbed, many), /too large/);
+  // A handful is fine.
+  assert.equal(
+    (
+      overlay(withEmbed, { sections: Array(3).fill({ id: 'e-big', linkType: 'Entry' }) }).fields
+        .sections as unknown[]
+    ).length,
+    3,
+  );
+});

@@ -41,6 +41,8 @@ const MAX_REFS = 500;
 const MAX_REF_LENGTH = 2048;
 const MAX_DEPTH = 64;
 const MAX_NODES = 200_000;
+/** The most HTML one re-render answers; a draft rendering more is refused, not streamed. */
+const MAX_HTML_BYTES = 5 * 1024 * 1024;
 /** Names that reach an object's prototype when assigned; dropped from supplied fields. */
 const FORBIDDEN = new Set(['__proto__', 'constructor', 'prototype']);
 
@@ -121,6 +123,9 @@ export async function renderPreviewBlocks({
     return json(admin, { error: 'These fields could not be rendered.' }, 422);
   }
 
+  if (parts.reduce((n, p) => n + p.html.length, 0) > MAX_HTML_BYTES)
+    return json(admin, { error: 'These fields render too much to preview.' }, 413);
+
   const origins = [...new Set([site.origin, url.origin])];
   const links = (h: string) => stayInPreview(h, { origins });
   const whole = () =>
@@ -176,7 +181,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * and refuses values nested deeper than MAX_DEPTH or larger than MAX_NODES.
  */
 export function overlay(draft: Entry, fields: Record<string, unknown>): Entry {
-  const index = new Map<string, unknown>();
+  const index = new Map<string, { value: unknown; weight: number }>();
   collect(draft.fields, index);
   let nodes = 0;
   const copy = (value: unknown, depth: number): unknown => {
@@ -185,7 +190,15 @@ export function overlay(draft: Entry, fields: Record<string, unknown>): Entry {
     if (depth > MAX_DEPTH) throw new TooLarge('fields are nested too deeply to render');
     if (Array.isArray(value)) return value.map((v) => copy(v, depth + 1));
     if (!isRecord(value)) return value;
-    if (isStub(value)) return index.get(value.id) ?? { id: value.id, linkType: value.linkType };
+    if (isStub(value)) {
+      const embedded = index.get(value.id);
+      if (!embedded) return { id: value.id, linkType: value.linkType };
+      // Each use of an embedded entry renders all of it: charge its size every time, so a few
+      // bytes of links can't ask for the same entry to render a hundred thousand times.
+      nodes += embedded.weight;
+      if (nodes > MAX_NODES) throw new TooLarge('fields are too large to render');
+      return embedded.value;
+    }
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value)) if (!FORBIDDEN.has(k)) out[k] = copy(v, depth + 1);
     return out;
@@ -209,7 +222,7 @@ function isStub(value: Record<string, unknown>): value is { id: string; linkType
  * Every entry and asset the draft embeds, by id, breadth first: when one appears more than once,
  * the shallowest copy (the one Delivery resolved furthest) wins.
  */
-function collect(root: unknown, index: Map<string, unknown>): void {
+function collect(root: unknown, index: Map<string, { value: unknown; weight: number }>): void {
   let level: unknown[] = [root];
   for (let depth = 0; depth <= 12 && level.length; depth += 1) {
     const next: unknown[] = [];
@@ -224,9 +237,22 @@ function collect(root: unknown, index: Map<string, unknown>): void {
         (isRecord(value.fields) || typeof value.url === 'string') &&
         !index.has(value.id)
       )
-        index.set(value.id, value);
+        index.set(value.id, { value, weight: weigh(value) });
       next.push(...Object.values(value));
     }
     level = next;
   }
+}
+
+/** How many values a value holds (itself included), counted up to MAX_NODES. */
+function weigh(root: unknown): number {
+  let n = 0;
+  const stack: unknown[] = [root];
+  while (stack.length && n <= MAX_NODES) {
+    const v = stack.pop();
+    n += 1;
+    if (Array.isArray(v)) stack.push(...v);
+    else if (isRecord(v)) stack.push(...Object.values(v));
+  }
+  return n;
 }

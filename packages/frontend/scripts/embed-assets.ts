@@ -42,7 +42,7 @@ function vendorLivePreview(): string[] {
       if (dep.includes('/')) throw new Error(`vendor: ${name} imports ${dep}, not a sibling file`);
       queue.push(dep);
     }
-    if (/\bimport\s*\(|\brequire\s*\(|from\s*["'](?!\.\/)/.test(source))
+    if (/\bimport\s*\(|\brequire\s*\(|from\s*["'](?!\.\/)|\bimport\s*["'](?!\.\/)/.test(source))
       throw new Error(`vendor: ${name} imports something other than a sibling file`);
     copyFileSync(join(from, name), join(to, name));
     copied.push(name);
