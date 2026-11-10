@@ -1,6 +1,6 @@
 {
   "name": "@contentworker/frontend",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "The ContentWorker site runtime: edge-cached rendering from the Delivery API, purge on publish, preview, SEO and GEO, and the primary blocks, styles and scripts. Sites need only a wrangler.jsonc.",
   "keywords": [
     "contentworker",

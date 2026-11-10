@@ -136,14 +136,16 @@ content and cached at the edge.
 Set the entry preview link in ContentWorker to
 `https://<your site>/__preview?entry={id}#token={token}`. The token rides in the fragment, so it
 never reaches a server log or a `Referer`: the site answers a tiny page that reads it, removes it
-from the address bar and history, and trades it (a same-origin POST) for an HttpOnly cookie
-scoped to `/__preview`. The older `?entry={id}&token={token}` form still works. Drafts render
+from the address bar and history, and submits it in a same-origin form POST for an HttpOnly
+cookie scoped to `/__preview`. The older `?entry={id}&token={token}` form still works. Drafts render
 under `/__preview/…`, never cached and never indexed. If your Preview API isn't at
 `api.<domain>`, set `CONTENTWORKER_PREVIEW` to its origin.
 
 ### Live preview in the admin
 
-The ContentWorker admin frames `/__preview` pages and re-renders each unsaved edit in them.
+The ContentWorker admin frames `/__preview` pages (the entry editor's Site pane and the canvas)
+and re-renders each unsaved edit in them, through `connectPreview` from
+`@contentworker/sdk/live-preview`, which the runtime serves for you.
 Preview responses may be framed by the admin's origin only (`Content-Security-Policy:
 frame-ancestors <admin>`) and send no `Referer`; public pages still refuse every frame but their
 own. The admin's origin comes from your backend setting: `cdn.<domain>` (or a
@@ -174,6 +176,10 @@ in the admin's frame shows drafts where they exist and published content elsewhe
 exit link: the admin has its own controls, and public pages can't load inside its frame. Your
 own block renderers can mark their fields too: `<h2${ctx.ref('heading')}>` adds the field's ref
 under preview and nothing on public pages.
+
+A block that styles itself from content writes CSS custom properties with
+`attrs({ style: ctx.cssVars({ '--accent': fields.accent }) })`: every value is checked with the
+SDK's `isSafeTokenValue` on every render, and an unsafe one is dropped whole.
 
 ## Develop
 

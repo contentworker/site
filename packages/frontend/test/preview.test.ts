@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import { HANDOFF_SCRIPT } from '../src/preview.ts';
-import { ADMIN, call, post } from './support/preview.ts';
+import { ADMIN, call, post, SITE } from './support/preview.ts';
 
 const LEGACY_CLEAR = 'cw_preview=; Path=/__preview; HttpOnly; Secure; SameSite=Lax; Max-Age=0';
 /** A grant: the old unpartitioned cookie cleared first, then the partitioned one set. */
@@ -17,11 +17,11 @@ const COOKIE =
   /^cw_preview=p-about~pw_good; Path=\/__preview; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=3600$/;
 
 /** The headers every /__preview response carries. */
-function assertPreviewHeaders(res: Response, admin = ADMIN) {
+function assertPreviewHeaders(res: Response, admin = ADMIN, referrer = 'no-referrer') {
   const csp = res.headers.get('content-security-policy') ?? '';
   assert.match(csp, new RegExp(`frame-ancestors ${admin.replace(/[.']/g, '\\$&')}(;|$)`));
   assert.doesNotMatch(csp, /frame-ancestors[^;]*('self'|\*)/);
-  assert.equal(res.headers.get('referrer-policy'), 'no-referrer');
+  assert.equal(res.headers.get('referrer-policy'), referrer);
   assert.equal(res.headers.get('x-robots-tag'), 'noindex');
   assert.match(res.headers.get('cache-control') ?? '', /no-store/);
 }
@@ -45,10 +45,14 @@ test('without ?token=, the link answers the fragment handoff page', async () => 
   const { res, body, previewCalls } = await call('/__preview?entry=p-about');
   assert.equal(res.status, 200);
   assert.match(res.headers.get('content-type') ?? '', /^text\/html/);
-  assertPreviewHeaders(res);
+  // Same-origin Referer, so its form POST carries Origin; nothing goes to another site.
+  assertPreviewHeaders(res, ADMIN, 'same-origin');
   assert.equal(res.headers.get('cache-tag'), null);
   assert.match(body, /<meta name="robots" content="noindex">/);
-  assert.match(body, /<meta name="referrer" content="no-referrer">/);
+  assert.match(
+    body,
+    /<form method="post" action="\/__preview" hidden><input type="hidden" name="entry"><input type="hidden" name="token"><\/form>/,
+  );
   assert.ok(body.includes(`<script>${HANDOFF_SCRIPT}</script>`));
   // Nothing from the request is printed into the page, and nothing was checked yet.
   assert.doesNotMatch(body, /p-about/);
@@ -58,117 +62,93 @@ test('without ?token=, the link answers the fragment handoff page', async () => 
 });
 
 /** Runs the handoff script against a fake window; returns what it did, in order. */
-async function runHandoff(href: string, answer: { status: number; json?: unknown }) {
+function runHandoff(href: string) {
   const url = new URL(href);
   const log: unknown[] = [];
   const status = { textContent: '' };
-  const location = {
-    search: url.search,
-    hash: url.hash,
-    pathname: url.pathname,
-    replace: (to: string) => log.push(['replace', to]),
+  const inputs: Record<string, { value: string }> = { entry: { value: '' }, token: { value: '' } };
+  const location = { search: url.search, hash: url.hash, pathname: url.pathname };
+  const form = {
+    elements: { namedItem: (name: string) => inputs[name] },
+    submit: () => log.push(['submit', { entry: inputs.entry?.value, token: inputs.token?.value }]),
   };
-  const sandbox = {
+  runInNewContext(HANDOFF_SCRIPT, {
     URLSearchParams,
-    JSON,
-    Promise,
     location,
-    document: { getElementById: (id: string) => (id === 'cw-status' ? status : null) },
+    document: {
+      forms: [form],
+      getElementById: (id: string) => (id === 'cw-status' ? status : null),
+    },
     history: {
       replaceState: (_s: unknown, _t: string, to: string) => {
         location.hash = '';
         log.push(['replaceState', to]);
       },
     },
-    fetch: async (to: string, init: RequestInit) => {
-      log.push(['fetch', to, { ...init, body: JSON.parse(String(init.body)) }]);
-      return {
-        ok: answer.status === 200,
-        status: answer.status,
-        json: async () => answer.json,
-      };
-    },
-  };
-  runInNewContext(HANDOFF_SCRIPT, sandbox);
-  await new Promise((r) => setTimeout(r, 10));
+  });
   return { log, status: status.textContent };
 }
 
-test('the handoff script drops the fragment first, posts the token, and follows the answer', async () => {
-  const { log } = await runHandoff(
+test('the handoff script drops the fragment first, then submits the token in its form', () => {
+  const { log } = runHandoff(
     'https://contentworker.site/__preview?entry=p-about&x=1#token=pw_good',
-    { status: 200, json: { location: '/__preview/about' } },
   );
-  assert.deepEqual(log[0], ['replaceState', '/__preview?entry=p-about&x=1']);
-  const [, to, init] = log[1] as [string, string, RequestInit & { body: unknown }];
-  assert.equal(to, '/__preview');
-  assert.equal(init.method, 'POST');
-  // Preview pages send no Referer, which would blank Origin on the POST; this keeps it.
-  assert.equal(init.referrerPolicy, 'same-origin');
-  assert.equal(init.credentials, 'same-origin');
-  assert.deepEqual(init.body, { entry: 'p-about', token: 'pw_good' });
-  assert.deepEqual(log[2], ['replace', '/__preview/about']);
+  assert.deepEqual(log, [
+    ['replaceState', '/__preview?entry=p-about&x=1'],
+    ['submit', { entry: 'p-about', token: 'pw_good' }],
+  ]);
 });
 
-test('the handoff script refuses to go anywhere but /__preview/, and says why it stopped', async () => {
-  const away = await runHandoff(
-    'https://contentworker.site/__preview?entry=p-about#token=pw_good',
-    {
-      status: 200,
-      json: { location: 'https://evil.example/' },
+test('without a token in the fragment, the handoff says so and submits nothing', () => {
+  const { log, status } = runHandoff('https://contentworker.site/__preview?entry=p-about');
+  assert.deepEqual(log, [['replaceState', '/__preview?entry=p-about']]);
+  assert.match(status, /no token/);
+});
+
+/** The handoff form's POST, as the browser sends it from the handoff page. */
+function postForm(fields: Record<string, string>, headers: Record<string, string> = {}) {
+  return call('/__preview', {
+    method: 'POST',
+    headers: {
+      origin: SITE,
+      'sec-fetch-site': 'same-origin',
+      'sec-fetch-dest': 'iframe',
+      'content-type': 'application/x-www-form-urlencoded',
+      ...headers,
     },
-  );
-  assert.equal(away.log.length, 2, 'no navigation');
-  assert.match(away.status, /could not start/);
-  const expired = await runHandoff(
-    'https://contentworker.site/__preview?entry=p-about#token=pw_bad',
-    { status: 403 },
-  );
-  assert.match(expired.status, /invalid or has expired/);
-  const none = await runHandoff('https://contentworker.site/__preview?entry=p-about', {
-    status: 200,
+    body: new URLSearchParams(fields).toString(),
   });
-  assert.deepEqual(
-    none.log.map((l) => (l as string[])[0]),
-    ['replaceState'],
-  );
-  assert.match(none.status, /no token/);
-});
+}
 
-test('POST /__preview trades a token for the cookie and answers where to go', async () => {
-  const { res, body } = await post('/__preview', {
-    entry: 'p-about',
-    token: 'pw_good',
-  });
-  assert.equal(res.status, 200);
-  assert.deepEqual(JSON.parse(body), { location: '/__preview/about' });
+test('POST /__preview trades the token for the cookie and redirects to the draft', async () => {
+  const { res } = await postForm({ entry: 'p-about', token: 'pw_good' });
+  assert.equal(res.status, 303);
+  assert.equal(res.headers.get('location'), '/__preview/about');
   assertGrantCookies(res);
-  assert.match(res.headers.get('content-type') ?? '', /^application\/json/);
   assertPreviewHeaders(res);
-  const bad = await post('/__preview', { entry: 'p-about', token: 'pw_bad' });
+  const bad = await postForm({ entry: 'p-about', token: 'pw_bad' });
   assert.equal(bad.res.status, 403);
-  assert.equal(bad.res.headers.get('set-cookie'), null);
+  assert.deepEqual(bad.res.headers.getSetCookie(), []);
 });
 
-test('POST /__preview takes same-origin JSON only, and only a little of it', async () => {
+test("POST /__preview takes this site's own form only, from a navigation, and only a little", async () => {
   const grant = { entry: 'p-about', token: 'pw_good' };
-  const status = async (headers: Record<string, string>, body: unknown = grant) =>
-    (await post('/__preview', body, { headers })).res.status;
+  const status = async (headers: Record<string, string>, fields: Record<string, string> = grant) =>
+    (await postForm(fields, headers)).res.status;
   assert.equal(await status({ origin: 'https://evil.example' }), 403);
   assert.equal(await status({ origin: 'null' }), 403);
   assert.equal(await status({ origin: ADMIN }), 403, 'not even the admin');
   assert.equal(await status({ 'sec-fetch-site': 'cross-site' }), 403);
+  assert.equal(await status({ 'sec-fetch-dest': 'empty' }), 403, 'a fetch, not a navigation');
+  assert.equal(await status({ 'content-type': 'application/json' }), 415);
+  assert.equal(await status({}, { ...grant, pad: 'x'.repeat(5000) }), 413);
   // No Origin at all (a request no browser page made) is refused too.
   const bare = await call('/__preview', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(grant),
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(grant).toString(),
   });
   assert.equal(bare.res.status, 403);
-  assert.equal(await status({ 'content-type': 'text/plain' }), 415);
-  assert.equal(await status({}, { ...grant, pad: 'x'.repeat(5000) }), 413);
-  assert.equal(await status({}, '[1]'), 400);
-  assert.equal(await status({}, '{nope'), 400);
 });
 
 test('the draft renders under /__preview: uncached, noindex, framable by the admin only', async () => {
@@ -206,7 +186,7 @@ test('with no admin origin to be found, preview pages can be framed by nobody', 
   const named = await call('/__preview?entry=p-about', {
     env: { ...env, CONTENTWORKER_ADMIN: 'https://admin.acme.example' },
   });
-  assertPreviewHeaders(named.res, 'https://admin.acme.example');
+  assertPreviewHeaders(named.res, 'https://admin.acme.example', 'same-origin');
 });
 
 test('other paths under /__preview show published content; exit clears the cookie', async () => {
@@ -245,7 +225,7 @@ test('the gateway stamps its nonce on the handoff script and keeps the preview p
     assert.match(csp, /^script-src 'nonce-[^']+' 'strict-dynamic' 'self'; /);
     assert.match(csp, /frame-ancestors https:\/\/example(;|$)/);
     assert.match(csp, /require-trusted-types-for 'script'/);
-    assert.equal(res.headers.get('referrer-policy'), 'no-referrer');
+    assert.equal(res.headers.get('referrer-policy'), 'same-origin');
   } finally {
     delete g.HTMLRewriter;
   }
@@ -298,7 +278,7 @@ test('a malformed CONTENTWORKER_ADMIN disables framing instead of breaking pages
   const normalised = await call('/__preview?entry=p-about', {
     env: { CONTENTWORKER_ADMIN: 'https://Admin.ACME.example:443/' },
   });
-  assertPreviewHeaders(normalised.res, 'https://admin.acme.example');
+  assertPreviewHeaders(normalised.res, 'https://admin.acme.example', 'same-origin');
 });
 
 test('with an old unpartitioned grant beside the new one, the draft for the path wins', async () => {

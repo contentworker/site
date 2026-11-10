@@ -5,7 +5,7 @@
  */
 
 /** The @contentworker/frontend range new sites depend on; a test holds it to the package. */
-export const FRONTEND_RANGE = '^0.3.0';
+export const FRONTEND_RANGE = '^0.4.0';
 /** wrangler for new sites: the version the runtime is tested with. */
 export const WRANGLER_RANGE = '^4.156.1';
 export const COMPATIBILITY_DATE = '2026-10-15';

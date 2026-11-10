@@ -202,13 +202,12 @@ export async function jsonBody(
   return { refused: text(admin, 'Send a JSON object.', 400) };
 }
 
-/** Checks a token and answers with the grant cookie, either as a redirect or as JSON. */
+/** Checks a token and answers with the grant cookie and a redirect to the draft. */
 async function grant(
   cw: Backend,
   admin: string | null,
   entryId: unknown,
   token: unknown,
-  as: 'redirect' | 'json',
 ): Promise<Response> {
   if (
     typeof entryId !== 'string' ||
@@ -221,33 +220,49 @@ async function grant(
   if (!draft) return text(admin, 'This preview link is invalid or has expired.', 403);
   const location = landing(draft);
   const value = `${encodeURIComponent(entryId)}~${token}`;
-  if (as === 'redirect')
-    return new Response(null, {
-      status: 303,
-      headers: setCookies(
-        new Headers(textHeaders({ ...previewHeaders(admin), location })),
-        value,
-        MAX_AGE,
-      ),
-    });
-  const headers = new Headers({
-    ...textHeaders(previewHeaders(admin)),
-    'content-type': 'application/json; charset=utf-8',
-  });
-  return new Response(JSON.stringify({ location }), {
-    headers: setCookies(headers, value, MAX_AGE),
+  return new Response(null, {
+    status: 303,
+    headers: setCookies(
+      new Headers(textHeaders({ ...previewHeaders(admin), location })),
+      value,
+      MAX_AGE,
+    ),
   });
 }
 
+/** The fields of a same-origin form POST, or the Response refusing it. */
+async function formBody(
+  request: Request,
+  url: URL,
+  admin: string | null,
+  max: number,
+): Promise<{ body: URLSearchParams } | { refused: Response }> {
+  if (!fromOwnPages(request, url))
+    return { refused: text(admin, 'Cross-origin request refused.', 403) };
+  const type = (request.headers.get('content-type') ?? '').toLowerCase();
+  if (!type.startsWith('application/x-www-form-urlencoded'))
+    return { refused: text(admin, 'Send the preview form.', 415) };
+  const raw = await readCapped(request, max);
+  if (raw === null) return { refused: text(admin, 'Request body too large.', 413) };
+  return { body: new URLSearchParams(raw) };
+}
+
 /**
- * The fragment handoff, run by the page below. It reads `#token=` and drops the fragment from
- * history before anything else, so the token is gone from the address bar, history and any
- * later Referer, then trades it for the cookie and replaces itself with the draft. Reads the
+ * The fragment handoff, run by the page below while it is still being parsed. It reads `#token=`
+ * and drops the fragment from history before anything else, so the token is gone from the
+ * address bar, history and any later Referer, then submits it in a form POST to /__preview,
+ * which sets the cookie and redirects to the draft. Submitting during parsing aborts this page
+ * before its `load`, so a framing admin sees one page load (the draft's), not two. Reads the
  * entry from its own URL: nothing from the request is printed into the page.
  */
-export const HANDOFF_SCRIPT = `(()=>{const q=new URLSearchParams(location.search),h=new URLSearchParams(location.hash.slice(1)),t=h.get('token'),s=document.getElementById('cw-status'),say=(m)=>{if(s)s.textContent=m};history.replaceState(null,'',location.pathname+location.search);if(!t){say('This preview link has no token.');return}fetch('${PREFIX}',{method:'POST',headers:{'content-type':'application/json'},credentials:'same-origin',referrerPolicy:'same-origin',body:JSON.stringify({entry:q.get('entry'),token:t})}).then((r)=>r.ok?r.json():Promise.reject(r.status)).then((d)=>{if(typeof d.location!=='string'||!d.location.startsWith('${PREFIX}/'))throw 0;location.replace(d.location)}).catch((e)=>say(e===403?'This preview link is invalid or has expired.':'The preview could not start. Try the link again.'))})()`;
+export const HANDOFF_SCRIPT = `(()=>{const q=new URLSearchParams(location.search),t=new URLSearchParams(location.hash.slice(1)).get('token'),f=document.forms[0];history.replaceState(null,'',location.pathname+location.search);if(!t||!f){const s=document.getElementById('cw-status');if(s)s.textContent='This preview link has no token.';return}f.elements.namedItem('entry').value=q.get('entry')||'';f.elements.namedItem('token').value=t;f.submit()})()`;
 
-const HANDOFF_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><meta name="referrer" content="no-referrer"><title>Opening preview</title></head><body><p id="cw-status" role="status">Opening the preview…</p><noscript><p>Preview links that carry the token after # need JavaScript. Use the ?token= form instead.</p></noscript><script>${HANDOFF_SCRIPT}</script></body></html>`;
+/**
+ * The handoff page. Its own Referrer-Policy is `same-origin` (every other preview response sends
+ * none): a POST from a page that sends no Referer carries `Origin: null`, and /__preview checks
+ * Origin. Same-origin only, so nothing leaves the site; the token was never in the URL's query.
+ */
+const HANDOFF_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Opening preview</title></head><body><p id="cw-status" role="status">Opening the preview…</p><form method="post" action="${PREFIX}" hidden><input type="hidden" name="entry"><input type="hidden" name="token"></form><noscript><p>Preview links that carry the token after # need JavaScript. Use the ?token= form instead.</p></noscript><script>${HANDOFF_SCRIPT}</script></body></html>`;
 
 function handoffPage(admin: string | null): Response {
   // The gateway's withNonce stamps this response's nonce on the script and into its CSP.
@@ -257,6 +272,7 @@ function handoffPage(admin: string | null): Response {
       'cache-control': 'private, no-store',
       'x-content-type-options': 'nosniff',
       ...previewHeaders(admin),
+      'referrer-policy': 'same-origin',
     },
   });
 }
@@ -293,10 +309,10 @@ export async function handlePreview(deps: PreviewDeps): Promise<Response> {
 
   if (request.method === 'POST') {
     if (url.pathname === PREFIX) {
-      const read = await jsonBody(request, url, admin, MAX_HANDOFF_BYTES);
+      if (!isNavigation(request)) return text(admin, 'Open preview links as a page.', 403);
+      const read = await formBody(request, url, admin, MAX_HANDOFF_BYTES);
       if ('refused' in read) return read.refused;
-      const { entry, token } = read.body;
-      return grant(cw, admin, entry, token, 'json');
+      return grant(cw, admin, read.body.get('entry'), read.body.get('token'));
     }
     if (url.pathname === RENDER_PATH) return renderPreviewBlocks({ request, url, cw, site, admin });
     return text(admin, 'Method not allowed', 405, { allow: 'GET, HEAD' });
@@ -307,7 +323,7 @@ export async function handlePreview(deps: PreviewDeps): Promise<Response> {
     const token = url.searchParams.get('token');
     if (token !== null) {
       if (!isNavigation(request)) return text(admin, 'Open preview links as a page.', 403);
-      return grant(cw, admin, entryId, token, 'redirect');
+      return grant(cw, admin, entryId, token);
     }
     if (!entryId || !ENTRY_ID.test(entryId)) return text(admin, 'Missing entry or token.', 400);
     return handoffPage(admin);
